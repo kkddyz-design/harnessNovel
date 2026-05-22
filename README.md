@@ -4,10 +4,12 @@
   <img src="docs/name.png" width="300">
 </p>
 
-<h3 align="center">长篇网络小说 AI 仿写系统</h3>
+<h2 align="center">长篇网络小说 AI 仿写系统</h2>
+
+<h3 align="center">让 AI 真正学会写好网文</h3>
 
 <p align="center">
-  让 AI 真正学会写好网文 —— 一个专注于高质量网文创作的 AI 辅助工具。通过「拆书 + 仿写」的双阶段流程，显著提升 AI 生成小说的结构专业度、世界观深度和创作水准。
+   一个专注于高质量网文创作的 AI 辅助工具。通过「拆书 + 仿写」的双阶段流程，显著提升 AI 生成小说的结构专业度、世界观深度和创作水准。
 </p>
 
 <div align="center">
