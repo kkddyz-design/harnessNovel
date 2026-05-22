@@ -1,14 +1,14 @@
+<p align="center">
+  <img src="docs/logo.png" width="100">
+  &nbsp;&nbsp;
+  <img src="docs/name.png" width="300">
+</p>
+
+<h3 align="center">长篇网络小说 AI 仿写系统</h3>
+
+<p align="center">通过多轮 LLM 调用，将一本参考小说自动拆解为大纲→卷纲→批次摘要→章纲→正文，并仿写生成全新的长篇小说。</p>
+
 <div align="center">
-
-<img src="docs/logo.jpg" width="120" alt="logo">
-
-<br/>
-
-<img src="docs/name.jpg" width="320" alt="harnessNovel">
-
-**长篇网络小说 AI 仿写系统**
-
-通过多轮 LLM 调用，将一本参考小说自动拆解为大纲→卷纲→批次摘要→章纲→正文，并仿写生成全新的长篇小说。
 
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-green.svg)](LICENSE)
