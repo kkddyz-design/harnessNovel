@@ -1,6 +1,10 @@
 <div align="center">
 
-# harnessNovel
+<img src="docs/logo.jpg" width="120" alt="logo">
+
+<br/>
+
+<img src="docs/name.jpg" width="320" alt="harnessNovel">
 
 **长篇网络小说 AI 仿写系统**
 
@@ -141,37 +145,6 @@ novel write 我的新小说 --volume 1
 - `--start N`：起始章节号，默认 1（仅 write）
 - `--max N`：最大生成章节数（仅 write）
 - `--force`：强制重新生成，覆盖已有内容
-
-## 工作区结构
-
-```
-novels/<工作区名>/
-├── creative_direction.md        # 创作方向
-├── reference/
-│   ├── sample_novel.txt         # 参考小说原文
-│   ├── novel_outline.md         # 参考小说大纲
-│   ├── outlines/                # 参考小说卷纲
-│   │   ├── vol_01_卷名/
-│   │   │   ├── chapters.txt     # 章节原文
-│   │   │   └── batch_*.md       # 批次摘要
-│   │   └── vol_02_卷名/
-│   └── worldview.md             # 参考小说世界观
-└── file_system/
-    ├── novel_outline.md         # 新小说大纲
-    ├── new_worldviews/          # 新小说世界观
-    │   └── vol_01_worldview.md
-    ├── new_volume_outlines/     # 新小说卷纲
-    │   └── vol_01_outline.md
-    ├── outlines/                # 批次摘要
-    │   └── vol_01/
-    │       └── batch_001_020.md
-    ├── chapter_outlines/        # 章纲
-    │   └── vol_01/
-    │       └── chapter_001.md
-    └── chapters/                # 正文
-        └── vol_01/
-            └── 001_第一章.md
-```
 
 ## License
 
