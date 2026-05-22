@@ -1,0 +1,804 @@
+import sys
+import os
+import re
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from core.llm_provider import LLMProvider
+from core.prompt_loader import PromptLoader
+from core.config import ConfigLoader
+from core.text_utils import normalize_text
+from core.workspace import init_workspace
+from training.reference_finder import (
+    list_reference_volumes,
+    load_reference_novel_outline,
+    load_reference_volume_outline,
+    find_reference_batch,
+)
+
+BATCH_SIZE = 20
+
+
+def _get_llm():
+    config = ConfigLoader.get_adaptive_builder_config()
+    if not config.get("api_key"):
+        config["api_key"] = os.getenv("OPENAI_API_KEY")
+    if not config.get("api_key"):
+        print("错误：未检测到 API Key。")
+        return None
+    return LLMProvider(**config)
+
+
+def _get_lite_llm():
+    """获取辅助任务 LLM（flash 模型）：世界观、映射表、灵感筛选、书名简介。"""
+    config = ConfigLoader.get_adaptive_builder_lite_config()
+    if not config:
+        config = ConfigLoader.get_adaptive_builder_config()
+    if not config.get("api_key"):
+        config["api_key"] = os.getenv("OPENAI_API_KEY")
+    if not config.get("api_key"):
+        print("错误：未检测到 API Key。")
+        return None
+    return LLMProvider(**config)
+
+
+def _read_file(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+    return content if content else None
+
+
+def _load_outline_rules(ws):
+    """加载大纲/卷纲设计规则。"""
+    rules = _read_file(os.path.join(ws.file_system, "OUTLINE_RULES.md"))
+    return rules or "（无大纲设计规则）"
+
+
+def _write_file(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content + "\n")
+
+
+def _load_creative_direction(ws, cli_input=None, direction_file=None):
+    """加载创作方向：优先 CLI 参数，其次指定文件，最后工作区的 creative_direction.md。"""
+    if cli_input:
+        return cli_input
+    if direction_file:
+        content = _read_file(direction_file)
+        if content:
+            return content
+    content = _read_file(ws.creative_direction)
+    if content:
+        lines = []
+        for line in content.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('<!--') and stripped.endswith('-->'):
+                continue
+            lines.append(line)
+        cleaned = '\n'.join(lines).strip()
+        body = cleaned
+        for heading in ['# 创作方向', '## 题材与定位', '## 主角构想', '## 世界观方向',
+                        '## 核心冲突', '## 希望保留的参考特质', '## 希望改变的部分', '## 其他补充']:
+            body = body.replace(heading, '')
+        if body.strip():
+            return cleaned
+    return ""
+
+
+def gen_novel_outline(ws, force=False, creative_direction=None, direction_file=None, preserved_content=None):
+    """Step 1: 仿写生成新小说大纲（含按卷世界观）。"""
+    output_path = os.path.join(ws.file_system, "novel_outline.md")
+    existing = _read_file(output_path)
+    if existing and not force:
+        print(f"新小说大纲已存在：{output_path}")
+        print("使用 --force 覆盖，或手动编辑现有文件。")
+        return
+
+    print(">>> 仿写生成新小说大纲 <<<")
+
+    direction = _load_creative_direction(ws, creative_direction, direction_file)
+    if direction:
+        print(f"  -> 创作方向已加载（{len(direction)} 字）")
+    else:
+        print("  -> 未提供创作方向，将完全由 LLM 自主创作。")
+        print("     可通过 --direction 参数或 creative_direction.md 文件提供方向。")
+
+    llm = _get_llm()
+    if not llm:
+        return
+
+    print(">>> 调用 LLM 生成大纲 <<<")
+    result = _gen_novel_outline_single_ref(ws, llm, direction, preserved_content=preserved_content)
+
+    if result:
+        _write_file(output_path, result)
+        print(f"  -> 新小说大纲已保存：{output_path}")
+
+        # 自动生成新小说全书世界观
+        print()
+        _gen_new_novel_worldview_aggregated(ws, llm)
+
+        print(f"\n  -> 请审核编辑大纲和世界观后，再进行卷纲生成。")
+
+
+def _gen_novel_outline_single_ref(ws, llm, direction, preserved_content=None):
+    """单参考模式：使用 adaptive_novel_outline 提示词。"""
+    reference_outline = load_reference_novel_outline(ws.reference_outlines)
+    if not reference_outline:
+        print("错误：未找到参考小说大纲。请先运行 outline_builder.py。")
+        return None
+
+    reference_worldview = _read_file(os.path.join(ws.file_system, "reference_worldview.md")) or "（未提取世界观，请先运行 worldview 命令）"
+
+    preserved_section = ""
+    if preserved_content:
+        preserved_section = f"【已有定稿中值得保留的大纲内容】\n以下内容来自已定稿章节的分析，重新生成大纲时必须保留这些内容的延续性：\n{preserved_content}"
+
+    prompt = PromptLoader.load(
+        "adaptive_novel_outline",
+        reference_outline=reference_outline,
+        reference_worldview=reference_worldview,
+        inspirations="（无灵感库）",
+        creative_direction=direction or "（用户未提供具体方向，请自主发挥创意）",
+        outline_rules=_load_outline_rules(ws),
+        preserved_content=preserved_section,
+    )
+    return normalize_text(llm.generate(prompt))
+
+
+def _gen_new_novel_worldview_aggregated(ws, llm):
+    """基于新小说大纲 + 参考小说全书世界观，生成新小说全书世界观。"""
+    novel_outline = _read_file(os.path.join(ws.file_system, "novel_outline.md"))
+    if not novel_outline:
+        print("错误：未找到新小说大纲。")
+        return
+
+    ref_wv = _read_file(os.path.join(ws.file_system, "reference_worldview.md"))
+    if not ref_wv:
+        print("错误：未找到参考小说世界观。请先运行 worldview 命令。")
+        return
+
+    aggregated_path = os.path.join(ws.file_system, "new_novel_worldview.md")
+    existing = _read_file(aggregated_path)
+    if existing:
+        print(f"新小说世界观已存在：{aggregated_path}")
+        print("使用 --force 覆盖。")
+        return
+
+    print(">>> 生成新小说全书世界观 <<<")
+
+    prompt = (
+        "你是一个专业的小说世界观设计专家。请基于参考小说的完整世界观，结合作者新小说大纲中的设定变更，"
+        "进行换皮映射，生成新小说的完整世界观。\n\n"
+        "这不是重新设计世界观，而是基于参考世界观的换皮映射。\n\n"
+        "【新小说大纲】\n" + novel_outline + "\n\n"
+        "【参考小说世界观】（换皮映射的源）\n" + ref_wv + "\n\n"
+        "【换皮映射要求】\n"
+        "1. 势力与人物：替换势力名、人物名。新大纲中新增的角色和势力补充进来，参考中删减的角色删掉。\n"
+        '2. 修炼体系：根据新大纲重新设计境界名称、数量、突破条件，不能照搬参考体系名称。\n'
+        "3. 特殊物品：替换法宝、丹药、灵物名称，功能对应，名称更换。\n"
+        "4. 地理场景：替换地名，地理结构对应，名称更换。\n"
+        "5. 种族与族群：替换种族名，特征对应。\n"
+        "6. 核心规则与禁忌：保持框架，调整表述。\n"
+        "7. 主角金手指进展：根据新大纲金手指设计，映射参考的进展节点。\n\n"
+        "输出要求：每个方面必须列出具体名称，不能概括。\n"
+        "使用纯文本输出，禁止使用 Markdown 格式符号。标题使用 # 标记。段落之间用空行分隔。\n\n"
+        "按以下结构输出：\n"
+        "一、势力与人物\n"
+        "二、修炼体系\n"
+        "三、特殊物品\n"
+        "四、地理场景\n"
+        "五、种族与族群\n"
+        "六、核心规则与禁忌\n"
+        "七、主角金手指进展"
+    )
+    result = normalize_text(llm.generate(prompt))
+    _write_file(aggregated_path, result)
+    print(f"  -> 新小说全书世界观已保存：{aggregated_path}")
+
+
+def _map_to_reference_volumes_sequential(ws, vol_idx, ref_volumes):
+    """顺序映射：新小说卷N 使用参考小说卷N。"""
+    if not ref_volumes:
+        return ""
+
+    idx = min(vol_idx - 1, len(ref_volumes) - 1)
+    vol = ref_volumes[idx]
+    outline = load_reference_volume_outline(ws.reference_outlines, vol["vol_idx"])
+    return f"（参考原作第{vol['vol_idx']}卷）\n{outline}" if outline else "（无对应参考卷纲）"
+
+
+def _gen_volume_worldview(ws, vol_idx, llm, force, novel_outline, new_novel_worldview):
+    """基于新大纲+新全书世界观+本卷卷纲，生成该卷的世界观。"""
+    new_wv_dir = os.path.join(ws.file_system, "new_worldviews")
+    vol_wv_path = os.path.join(new_wv_dir, f"vol_{vol_idx:02d}_worldview.md")
+
+    existing_wv = _read_file(vol_wv_path)
+    if existing_wv and not force:
+        print(f"  卷{vol_idx}世界观已存在，跳过。")
+        return
+
+    # 读取本卷新卷纲（从按卷文件读取）
+    vol_outline_dir = os.path.join(ws.file_system, "new_volume_outlines")
+    vol_outline_file = os.path.join(vol_outline_dir, f"vol_{vol_idx:02d}_outline.md")
+    current_vol_text = _read_file(vol_outline_file) or ""
+    if not current_vol_text:
+        print(f"  警告：未找到本卷卷纲文件 {vol_outline_file}")
+        return
+    # 去除终卷标记
+    current_vol_text = re.sub(r'\n?\[(?:FINISHED|CONTINUE)\]\s*$', '', current_vol_text).strip()
+
+    # 读取上一卷世界观（衔接参考）
+    prev_wv = ""
+    if vol_idx > 1:
+        prev_path = os.path.join(new_wv_dir, f"vol_{vol_idx - 1:02d}_worldview.md")
+        prev_wv = _read_file(prev_path) or ""
+
+    # 旧世界观（force 覆盖时作为参考）
+    old_wv = existing_wv or ""
+
+    os.makedirs(new_wv_dir, exist_ok=True)
+    print(f"  -> 生成卷{vol_idx}世界观...")
+
+    prompt = (
+        "你是一个专业的小说世界观设计专家。请基于新小说的全书世界观，结合本卷卷纲的具体内容，"
+        "细化生成指定卷的详细世界观设定。\n\n"
+        "【新小说全书世界观】\n" + new_novel_worldview + "\n\n"
+        "【本卷卷纲】\n" + current_vol_text + "\n\n"
+        + (f"【上一卷世界观】（保持世界观演进的一致性）\n{prev_wv}\n\n" if prev_wv else "")
+        + (f"【本卷旧世界观】（参考已有设定，在此基础上升级）\n{old_wv}\n\n" if old_wv else "")
+        + "【要求】\n"
+        "1. 以全书世界观为基础，细化到本卷涉及的具体势力、人物、地点、物品。\n"
+        "2. 体现世界观在本卷中的演进：新势力登场、角色成长、新区域解锁等。\n"
+        "3. 与上一卷世界观保持连续性，不要出现矛盾设定。\n"
+        "4. 每个方面必须列出具体名称，不能概括。\n"
+        "5. 使用纯文本输出，禁止使用 Markdown 格式符号。标题使用 # 标记。段落之间用空行分隔。\n\n"
+        "按以下结构输出：\n"
+        "一、势力与人物\n"
+        "二、修炼体系\n"
+        "三、特殊物品\n"
+        "四、地理场景\n"
+        "五、种族与族群\n"
+        "六、核心规则与禁忌\n"
+        "七、主角金手指进展"
+    )
+    result = normalize_text(llm.generate(prompt))
+    _write_file(vol_wv_path, result)
+    print(f"  -> 卷{vol_idx}世界观已保存：{vol_wv_path}")
+
+
+def _gen_single_volume(ws, vol_idx, ref_volumes, force, creative_direction, llm, preserved_content=None):
+    """生成单卷卷纲，再生成该卷世界观。返回 True 表示已是终卷。"""
+    vol_dir = os.path.join(ws.file_system, "new_volume_outlines")
+    vol_file = os.path.join(vol_dir, f"vol_{vol_idx:02d}_outline.md")
+    os.makedirs(vol_dir, exist_ok=True)
+
+    existing_this = _read_file(vol_file)
+    if existing_this and not force:
+        print(f"  -> 卷{vol_idx}卷纲已存在，跳过。（用 --force 覆盖）")
+        if existing_this.rstrip().endswith("[FINISHED]"):
+            return True
+        return False
+
+    print(f"  -> 生成卷{vol_idx}卷纲...")
+
+    direction = _load_creative_direction(ws, creative_direction)
+
+    novel_outline = _read_file(os.path.join(ws.file_system, "novel_outline.md")) or ""
+
+    # 读取上一卷的卷纲（按卷存储）
+    prev_vol_file = os.path.join(vol_dir, f"vol_{vol_idx - 1:02d}_outline.md")
+    previous_volumes = _read_file(prev_vol_file) if vol_idx > 1 and os.path.exists(prev_vol_file) else ""
+    if not previous_volumes:
+        previous_volumes = "（无前卷，这是第一卷）"
+
+    # 使用新小说全书世界观
+    new_novel_worldview = _read_file(os.path.join(ws.file_system, "new_novel_worldview.md")) or "（无新小说世界观，请先运行 novel-outline 命令）"
+
+    ref_vol_outline = _map_to_reference_volumes_sequential(ws, vol_idx, ref_volumes)
+
+    preserved_section = ""
+    if preserved_content:
+        preserved_section = f"【已有定稿中值得保留的卷纲内容】\n以下内容来自已定稿章节的分析，重新生成卷纲时必须保留这些内容的延续性：\n{preserved_content}"
+
+    prompt = PromptLoader.load(
+        "adaptive_volume_outline",
+        novel_outline=novel_outline,
+        reference_volume_outline=ref_vol_outline or "（无参考卷纲）",
+        new_novel_worldview=new_novel_worldview,
+        inspirations="（无灵感库）",
+        volume_index=vol_idx,
+        creative_direction=direction or "（用户未提供具体方向）",
+        previous_volumes=previous_volumes,
+        outline_rules=_load_outline_rules(ws),
+        preserved_content=preserved_section,
+    )
+    result = normalize_text(llm.generate(prompt))
+
+    if not result:
+        return False
+
+    is_finished = result.rstrip().endswith("[FINISHED]")
+    result_clean = re.sub(r'\n?\[(?:FINISHED|CONTINUE)\]\s*$', '', result).strip()
+
+    # 写入按卷文件（保留 [FINISHED] 标记以便重跑时检测）
+    marker = "\n[FINISHED]" if is_finished else "\n[CONTINUE]"
+    _write_file(vol_file, result_clean + marker + "\n")
+
+    if is_finished:
+        print(f"  -> 第 {vol_idx} 卷卷纲已保存（终卷，生成完毕）。")
+    else:
+        print(f"  -> 第 {vol_idx} 卷卷纲已保存，继续生成下一卷。")
+
+    # Step 2: 生成该卷的世界观
+    _gen_volume_worldview(ws, vol_idx, llm, force, novel_outline, new_novel_worldview)
+
+    return is_finished
+
+
+def _write_aggregate_volume_outline(ws):
+    """从按卷文件汇总写入 volume_outline.md（兼容旧引用）。"""
+    vol_dir = os.path.join(ws.file_system, "new_volume_outlines")
+    if not os.path.isdir(vol_dir):
+        return
+    vol_files = sorted(f for f in os.listdir(vol_dir) if re.match(r'^vol_\d+_outline\.md$', f))
+    if not vol_files:
+        return
+
+    parts = []
+    for vf in vol_files:
+        content = _read_file(os.path.join(vol_dir, vf))
+        if content:
+            # 去除终卷/续卷标记（仅用于按卷文件的重跑检测）
+            clean = re.sub(r'\n?\[(?:FINISHED|CONTINUE)\]\s*$', '', content).strip()
+            if clean:
+                parts.append(clean)
+            parts.append(content.strip())
+
+    output_path = os.path.join(ws.file_system, "volume_outline.md")
+    _write_file(output_path, "\n\n---\n\n".join(parts))
+    print(f"\n  -> 汇总卷纲已写入：{output_path}")
+
+
+def gen_volume_outline(ws, volume=None, force=False, creative_direction=None, preserved_content=None):
+    """Step 2: 逐卷生成卷纲，由 LLM 判断是否为终卷。"""
+    MAX_VOLUMES = 20
+
+    novel_outline = _read_file(os.path.join(ws.file_system, "novel_outline.md"))
+    if not novel_outline:
+        print("错误：未找到新小说大纲。请先运行 novel-outline 子命令。")
+        return
+
+    outlines_dir = ws.reference_outlines
+    ref_volumes = list_reference_volumes(outlines_dir)
+    if not ref_volumes:
+        print("错误：未找到参考小说卷数据。请先运行 outline_builder.py。")
+        return
+
+    print(f"  -> 参考小说共 {len(ref_volumes)} 卷，新小说卷数将由 LLM 逐卷判断。")
+
+    llm = _get_llm()
+    if not llm:
+        return
+
+    if volume is not None:
+        if volume < 1 or volume > MAX_VOLUMES:
+            print(f"错误：卷号 {volume} 超出范围（1-{MAX_VOLUMES}）。")
+            return
+        print(f">>> 仿写生成卷{volume}卷纲 <<<")
+        _gen_single_volume(ws, volume, ref_volumes, force, creative_direction, llm, preserved_content=preserved_content)
+    else:
+        # 从按卷文件检测已有卷数（支持断点续传）
+        vol_dir = os.path.join(ws.file_system, "new_volume_outlines")
+        start_vol = 1
+        if os.path.isdir(vol_dir) and not force:
+            vol_files = sorted(f for f in os.listdir(vol_dir) if re.match(r'^vol_\d+_outline\.md$', f))
+            if vol_files:
+                # 从最后一个文件推断下一卷
+                last_match = re.match(r'^vol_(\d+)_outline\.md$', vol_files[-1])
+                if last_match:
+                    last_vol = int(last_match.group(1))
+                    # 检查终卷标记
+                    last_content = _read_file(os.path.join(vol_dir, vol_files[-1]))
+                    if last_content and last_content.rstrip().endswith("[FINISHED]"):
+                        print(f">>> 卷纲已全部生成（共 {last_vol} 卷），无需继续。使用 --force 覆盖。<<<")
+                        return
+                    start_vol = last_vol + 1
+                    print(f">>> 断点续传：卷1-{last_vol} 已存在，从卷{start_vol}继续生成 <<<")
+                else:
+                    print(f">>> 仿写逐卷生成全部卷纲（最多 {MAX_VOLUMES} 卷，LLM 自动判断终卷）<<<")
+            else:
+                print(f">>> 仿写逐卷生成全部卷纲（最多 {MAX_VOLUMES} 卷，LLM 自动判断终卷）<<<")
+        else:
+            print(f">>> 仿写逐卷生成全部卷纲（最多 {MAX_VOLUMES} 卷，LLM 自动判断终卷）<<<")
+
+        for vol_idx in range(start_vol, MAX_VOLUMES + 1):
+            is_finished = _gen_single_volume(ws, vol_idx, ref_volumes, force, creative_direction, llm, preserved_content=preserved_content)
+            if is_finished:
+                break
+
+    # 汇总写入 volume_outline.md（兼容旧引用）
+    _write_aggregate_volume_outline(ws)
+
+
+def _novel_outlines_dir(ws):
+    """返回新小说批次摘要目录。"""
+    return os.path.join(ws.file_system, "outlines")
+
+
+
+
+
+
+def gen_serial_chapter_outlines(ws, volume=1, force=False):
+    """两阶段串行生成章纲：
+    Phase 1: 串行生成本卷的批次摘要
+    Phase 2: 串行生成本卷每个batch下的章纲
+    """
+    # ── 加载基础数据 ──
+    vol_outline_file = os.path.join(ws.file_system, "new_volume_outlines", f"vol_{volume:02d}_outline.md")
+    vol_outline = _read_file(vol_outline_file)
+    if not vol_outline:
+        print(f"错误：未找到卷{volume}的卷纲文件：{vol_outline_file}")
+        return
+
+    vol_wv_file = os.path.join(ws.file_system, "new_worldviews", f"vol_{volume:02d}_worldview.md")
+    vol_worldview = _read_file(vol_wv_file)
+    if not vol_worldview:
+        print(f"错误：未找到卷{volume}的世界观文件：{vol_wv_file}")
+        print("请先运行 volume-outline 命令生成卷纲和世界观。")
+        return
+
+    # 从卷纲中推断总章数
+    chapter_nums = re.findall(r'第(\d+)章', vol_outline)
+    if not chapter_nums:
+        print("错误：无法从卷纲中推断总章数。")
+        return
+    total_chapters = max(int(c) for c in chapter_nums)
+
+    llm = _get_llm()
+    if not llm:
+        return
+
+    # 参考卷映射
+    outlines_dir = ws.reference_outlines
+    ref_volumes = list_reference_volumes(outlines_dir)
+    if not ref_volumes:
+        print("错误：未找到参考小说卷数据。")
+        return
+    ref_vol = ref_volumes[min(volume - 1, len(ref_volumes) - 1)]
+
+    # ═══════════════════════════════════════════
+    # Phase 1: 串行生成批次摘要
+    # ═══════════════════════════════════════════
+    print(f">>> Phase 1: 串行生成卷{volume}的批次摘要（共{total_chapters}章，每批{BATCH_SIZE}章）<<<")
+
+    vol_batch_dir = os.path.join(_novel_outlines_dir(ws), f"vol_{volume:02d}")
+    os.makedirs(vol_batch_dir, exist_ok=True)
+
+    batch_count = (total_chapters + BATCH_SIZE - 1) // BATCH_SIZE
+    for batch_idx in range(1, batch_count + 1):
+        start_ch = (batch_idx - 1) * BATCH_SIZE + 1
+        end_ch = min(batch_idx * BATCH_SIZE, total_chapters)
+        batch_file = os.path.join(vol_batch_dir, f"batch_{start_ch:03d}_{end_ch:03d}.md")
+
+        if os.path.exists(batch_file) and not force:
+            print(f"  批次{batch_idx}（第{start_ch}-{end_ch}章）已存在，跳过。")
+            continue
+
+        # 读取上一批次
+        prev_batch = ""
+        if batch_idx > 1:
+            prev_start = (batch_idx - 2) * BATCH_SIZE + 1
+            prev_end = min((batch_idx - 1) * BATCH_SIZE, total_chapters)
+            prev_file = os.path.join(vol_batch_dir, f"batch_{prev_start:03d}_{prev_end:03d}.md")
+            prev_batch = _read_file(prev_file) or ""
+        if not prev_batch:
+            prev_batch = "（无前序批次，这是第一个batch）"
+
+        # 参考批次
+        ref_batch = find_reference_batch(
+            outlines_dir, ref_vol["vol_idx"],
+            start_ch, end_ch, total_chapters,
+            ref_vol["chapter_count"],
+        )
+
+        print(f"  生成批次{batch_idx}（第{start_ch}-{end_ch}章）...")
+        prompt = PromptLoader.load(
+            "novel_batch_summary",
+            volume_outline=vol_outline,
+            volume_worldview=vol_worldview,
+            batch_index=batch_idx,
+            start_chapter=start_ch,
+            end_chapter=end_ch,
+            previous_batch=prev_batch,
+            reference_batch=ref_batch or "（无参考批次数据）",
+        )
+        result = normalize_text(llm.generate(prompt))
+        _write_file(batch_file, result)
+        print(f"  -> 批次{batch_idx}已保存：{batch_file}")
+
+    print(f"\n>>> Phase 1 完成，共 {batch_count} 个批次 <<<")
+
+    # ═══════════════════════════════════════════
+    # Phase 2: 串行生成章纲（按batch逐章生成）
+    # ═══════════════════════════════════════════
+    print(f"\n>>> Phase 2: 串行生成卷{volume}的章纲 <<<")
+
+    ch_out_dir = os.path.join(ws.file_system, "chapter_outlines", f"vol_{volume:02d}")
+    os.makedirs(ch_out_dir, exist_ok=True)
+
+    # 按批次文件顺序读取
+    batch_files = sorted(
+        f for f in os.listdir(vol_batch_dir)
+        if re.match(r'^batch_\d+_\d+\.md$', f)
+    )
+
+    for bf_name in batch_files:
+        m = re.match(r'^batch_(\d+)_(\d+)\.md$', bf_name)
+        if not m:
+            continue
+        batch_start = int(m.group(1))
+        batch_end = int(m.group(2))
+
+        batch_content = _read_file(os.path.join(vol_batch_dir, bf_name))
+        if not batch_content:
+            print(f"  警告：批次文件 {bf_name} 为空，跳过。")
+            continue
+
+        print(f"\n  --- 批次：第{batch_start}-{batch_end}章 ---")
+
+        for ch_num in range(batch_start, batch_end + 1):
+            out_file = os.path.join(ch_out_dir, f"chapter_{ch_num:03d}.md")
+            if os.path.exists(out_file) and not force:
+                print(f"  第{ch_num}章章纲已存在，跳过。")
+                continue
+
+            # 读取前2章章纲
+            prev_outlines = []
+            for i in range(max(1, ch_num - 2), ch_num):
+                prev_file = os.path.join(ch_out_dir, f"chapter_{i:03d}.md")
+                content = _read_file(prev_file)
+                if content:
+                    clean = re.sub(r'\n?\[(?:FINISHED|CONTINUE)\]\s*$', '', content).strip()
+                    prev_outlines.append(f"【第{i}章 章纲】\n{clean}")
+            previous_text = "\n\n".join(prev_outlines) if prev_outlines else "（无前序章纲，这是本章节范围内第一章）"
+
+            print(f"  生成第{ch_num}章章纲...")
+            prompt = PromptLoader.load(
+                "serial_chapter_outline",
+                volume_outline=vol_outline,
+                volume_worldview=vol_worldview,
+                batch_summary=batch_content,
+                previous_chapter_outlines=previous_text,
+                chapter_num=ch_num,
+            )
+            result = normalize_text(llm.generate(prompt))
+            _write_file(out_file, result)
+            print(f"  -> 第{ch_num}章章纲已保存：{out_file}")
+
+    print(f"\n>>> 卷{volume}全部 {total_chapters} 章章纲已生成。<<<")
+
+
+def gen_serial_chapters(ws, volume=1, start_chapter=1, max_chapters=None):
+    """串行生成正文：以卷纲+本卷世界观+本章章纲+前2章正文+写作文风为输入生成下一章正文。"""
+    # 项目根目录
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # 读取卷纲
+    vol_outline = _read_file(os.path.join(ws.file_system, "new_volume_outlines", f"vol_{volume:02d}_outline.md"))
+    if not vol_outline:
+        print(f"错误：未找到卷{volume}的卷纲文件。请先运行 volume-outline。")
+        return
+
+    # 读取本卷世界观
+    vol_worldview = _read_file(os.path.join(ws.file_system, "new_worldviews", f"vol_{volume:02d}_worldview.md"))
+    if not vol_worldview:
+        print(f"错误：未找到卷{volume}的世界观文件。请先运行 volume-outline。")
+        return
+
+    # 读取写作文风规范（从项目根目录读取）
+    style_guide = _read_file(os.path.join(_root, "core", "system_prompt.md")) or ""
+    agents_md = _read_file(os.path.join(_root, "core", "agents.md")) or ""
+    writing_rules = f"{style_guide}\n\n{agents_md}" if style_guide or agents_md else "（无写作文风规范）"
+
+    # 扫描章纲
+    outlines_dir = os.path.join(ws.file_system, "chapter_outlines", f"vol_{volume:02d}")
+    if not os.path.isdir(outlines_dir):
+        print(f"错误：未找到章纲目录 {outlines_dir}。请先运行 chapter-outlines。")
+        return
+
+    outline_files = sorted(f for f in os.listdir(outlines_dir) if re.match(r'^chapter_\d+\.md$', f))
+    if not outline_files:
+        print(f"错误：章纲目录为空。请先运行 chapter-outlines。")
+        return
+
+    # 推断总章数
+    total_chapters = 0
+    for f in outline_files:
+        m = re.match(r'^chapter_(\d+)\.md$', f)
+        if m:
+            total_chapters = max(total_chapters, int(m.group(1)))
+
+    print(f">>> 串行生成正文：卷{volume}，共 {total_chapters} 章 <<<")
+
+    llm = _get_llm()
+    if not llm:
+        return
+
+    out_dir = os.path.join(ws.file_system, "chapters", f"vol_{volume:02d}")
+    os.makedirs(out_dir, exist_ok=True)
+
+    # 确定待生成章节
+    pending = []
+    for ch_num in range(start_chapter, total_chapters + 1):
+        out_file = os.path.join(out_dir, f"{ch_num:03d}_第{ch_num}章.md")
+        if os.path.exists(out_file):
+            print(f"  第{ch_num}章正文已存在，跳过。")
+            continue
+        pending.append(ch_num)
+        if max_chapters and len(pending) >= max_chapters:
+            break
+
+    if not pending:
+        print("[Orchestrator] 没有待生成的章节（全部已存在）。")
+        return
+
+    print(f"  待生成：{len(pending)} 章（第 {pending[0]}-{pending[-1]} 章）")
+
+    for idx, ch_num in enumerate(pending):
+        out_file = os.path.join(out_dir, f"{ch_num:03d}_第{ch_num}章.md")
+
+        # 读取本章章纲
+        chapter_outline = _read_file(os.path.join(outlines_dir, f"chapter_{ch_num:03d}.md"))
+        if not chapter_outline:
+            print(f"  警告：第{ch_num}章章纲文件不存在，跳过。")
+            continue
+        chapter_outline = re.sub(r'\n?\[(?:FINISHED|CONTINUE)\]\s*$', '', chapter_outline).strip()
+
+        print(f"\n--- 撰写第{ch_num}章（{idx + 1}/{len(pending)}）---")
+
+        # 读取前2章正文
+        prev_texts = []
+        for i in range(max(1, ch_num - 2), ch_num):
+            prev_file = os.path.join(out_dir, f"{i:03d}_第{i}章.md")
+            content = _read_file(prev_file)
+            if content:
+                # 取正文最后2000字
+                lines = content.strip().split('\n')
+                title = lines[0] if lines else ""
+                body = '\n'.join(lines[1:]) if len(lines) > 1 else ""
+                truncated = body[-2000:] if len(body) > 2000 else body
+                prev_texts.append(f"{title}\n{truncated}")
+        history_section = "\n\n".join(prev_texts) if prev_texts else "（无前序正文，这是第一章）"
+
+        # 读取本章对应的批次摘要
+        batch_summary = ""
+        batch_dir = os.path.join(ws.file_system, "outlines", f"vol_{volume:02d}")
+        if os.path.isdir(batch_dir):
+            batch_idx = (ch_num - 1) // BATCH_SIZE + 1
+            bs = (batch_idx - 1) * BATCH_SIZE + 1
+            be = min(batch_idx * BATCH_SIZE, total_chapters)
+            bf = os.path.join(batch_dir, f"batch_{bs:03d}_{be:03d}.md")
+            batch_content = _read_file(bf)
+            if batch_content:
+                batch_summary = batch_content
+
+        context = (
+            f"=== 写作规范 ===\n{writing_rules}\n\n"
+            f"=== 卷纲（卷{volume}）===\n{vol_outline}\n\n"
+            f"=== 本卷世界观 ===\n{vol_worldview}\n\n"
+            f"=== 章纲（第{ch_num}章）===\n{chapter_outline}\n\n"
+            + (f"=== 当前批次摘要（第{bs}-{be}章）===\n{batch_summary}\n\n" if batch_summary else "")
+            + f"=== 前序正文 ===\n{history_section}"
+        )
+
+        prompt = PromptLoader.load(
+            "adaptive_drafting",
+            context=context,
+            start_chapter=ch_num,
+            end_chapter=ch_num,
+            chapter_count=1,
+        )
+        result = normalize_text(llm.generate(prompt))
+        _write_file(out_file, result)
+        print(f"  -> 第{ch_num}章正文已保存：{out_file}")
+
+    print(f"\n  -> 卷{volume}正文生成完毕（共 {len(pending)} 章）。")
+
+
+def gen_worldview(ws):
+    """按卷提取世界观，再汇总为完整世界观。"""
+    from training.reference_finder import list_reference_volumes, load_reference_volume_outline
+    import glob
+
+    print(">>> 提取参考小说世界观 <<<")
+
+    # 世界观存储目录
+    worldview_dir = os.path.join(ws.file_system, "worldviews")
+    aggregated_path = os.path.join(ws.file_system, "reference_worldview.md")
+
+    ref_volumes = list_reference_volumes(ws.reference_outlines)
+    if not ref_volumes:
+        print("错误：未找到参考小说卷数据。请先运行 outline_builder.py。")
+        return
+
+    llm = _get_lite_llm()
+    if not llm:
+        return
+
+    print(">>> 按卷提取参考小说世界观 <<<")
+
+    # 阶段一：按卷提取世界观
+    os.makedirs(worldview_dir, exist_ok=True)
+    volume_worldviews = []
+
+    for vol in ref_volumes:
+        vol_idx = vol["vol_idx"]
+        vol_title = vol["title"]
+        vol_wv_path = os.path.join(worldview_dir, f"vol_{vol_idx:02d}_worldview.md")
+
+        existing = _read_file(vol_wv_path)
+        if existing:
+            print(f"  卷{vol_idx}世界观已存在，跳过。")
+            volume_worldviews.append({"vol_idx": vol_idx, "title": vol_title, "content": existing})
+            continue
+
+        print(f"  提取卷{vol_idx}（{vol_title}）世界观...")
+
+        vol_outline = load_reference_volume_outline(ws.reference_outlines, vol_idx)
+
+        # 收集本卷的批次摘要
+        batch_files = sorted(glob.glob(os.path.join(vol["dir_path"], "batch_*.md")))
+        batch_contents = []
+        for bf in batch_files:
+            content = _read_file(bf)
+            if content:
+                batch_contents.append(content)
+
+        if not batch_contents:
+            print(f"  卷{vol_idx}无批次摘要，跳过。")
+            continue
+
+        batches_text = "\n\n---\n\n".join(batch_contents)
+        prompt = PromptLoader.load(
+            "worldview_extract",
+            volume_title=vol_title,
+            volume_outline=vol_outline or "（无卷纲）",
+            batch_summaries=batches_text,
+        )
+        result = normalize_text(llm.generate(prompt))
+        _write_file(vol_wv_path, result)
+        volume_worldviews.append({"vol_idx": vol_idx, "title": vol_title, "content": result})
+        print(f"  卷{vol_idx}世界观已保存")
+
+    if not volume_worldviews:
+        print("错误：未提取到任何卷的世界观。")
+        return
+
+    # 阶段二：汇总所有卷的世界观
+    existing_agg = _read_file(aggregated_path)
+    if existing_agg:
+        print(f"\n汇总世界观已存在：{aggregated_path}")
+        print("如需重新生成，请先删除该文件。")
+        return
+
+    print(f"\n>>> 汇总 {len(volume_worldviews)} 卷世界观 <<<")
+
+    all_wv = "\n\n---\n\n".join(
+        f"# {wv['title']}（卷{wv['vol_idx']}）\n{wv['content']}"
+        for wv in volume_worldviews
+    )
+
+    if len(volume_worldviews) == 1:
+        _write_file(aggregated_path, volume_worldviews[0]["content"])
+    else:
+        prompt = PromptLoader.load("worldview_merge", volume_worldviews=all_wv)
+        result = normalize_text(llm.generate(prompt))
+        _write_file(aggregated_path, result)
+
+    print(f"  -> 汇总世界观已保存：{aggregated_path}")
+    print(f"  -> 按卷世界观保存在：{worldview_dir}/")
