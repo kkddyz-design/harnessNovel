@@ -2,24 +2,17 @@
 chcp 65001 >nul 2>&1
 setlocal enabledelayedexpansion
 
-REM harnessNovel 一键安装脚本（Windows）
-
 cd /d "%~dp0"
 
 REM ── 检查 Python 3.9+ ─────────────────────────────────────
 set PYTHON=
-for %%c in (python py) do (
-    if not defined PYTHON (
-        %%c --version >nul 2>&1
-        if !errorlevel! equ 0 (
-            for /f "tokens=2 delims= " %%v in ('%%c --version 2^>^&1') do (
-                for /f "tokens=1,2 delims=." %%a in ("%%v") do (
-                    if %%a geq 3 if %%b geq 9 (
-                        set PYTHON=%%c
-                    )
-                )
-            )
-        )
+python -c "import sys; assert sys.version_info >= (3,9)" >nul 2>&1
+if !errorlevel! equ 0 (
+    set PYTHON=python
+) else (
+    py -c "import sys; assert sys.version_info >= (3,9)" >nul 2>&1
+    if !errorlevel! equ 0 (
+        set PYTHON=py
     )
 )
 
@@ -58,16 +51,13 @@ echo "%~dp0.venv\Scripts\novel.exe" %%*
 ) > novel.bat
 
 REM ── 注册全局命令 novel ──────────────────────────────────
-REM 将项目目录添加到用户 PATH，使 novel.bat 全局可用
 set "PROJECT_DIR=%~dp0"
-REM 去掉末尾反斜杠
-if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
+if "!PROJECT_DIR:~-1!"=="\" set "PROJECT_DIR=!PROJECT_DIR:~0,-1!"
 
-REM 检查是否已在 PATH 中
-echo %PATH% | findstr /i /c:"%PROJECT_DIR%" >nul
+echo %PATH% | findstr /i /c:"!PROJECT_DIR!" >nul
 if !errorlevel! neq 0 (
     echo 正在注册全局命令 novel ...
-    setx PATH "!PATH!;%PROJECT_DIR%" >nul
+    setx PATH "!PATH!;!PROJECT_DIR!" >nul
     echo 已将项目目录添加到用户 PATH
     echo 请重新打开终端窗口后生效
 )
