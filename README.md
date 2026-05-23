@@ -179,7 +179,7 @@ novel write 我的新小说 --volume 1
 飞鸟 one the way — 探索者
 
 <p align="left">
-  <img src="docs/qrcode.png" width="200" alt="公众号二维码">
+  <img src="docs/qrcode.png" width="400" alt="公众号二维码">
 </p>
 
 
