@@ -77,7 +77,7 @@
 3. **迭代优化**：随时调整大纲、世界观、章节内容，逐步完善作品。
 
 <p align="center">
-  <img src="docs/workflow.png" width="720" alt="工作流程">
+  <img src="docs/workflow.png" width="720" alt="工作流程" style="border-radius: 12px;">
 </p>
 
 ## 特性
