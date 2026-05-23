@@ -80,32 +80,32 @@
 flowchart TB
     A["📄 参考小说.txt"] --> B
 
-    subgraph B["novel init — 自动拆书"]
-        B1["章节切分"] --> B2["批次摘要"] --> B3["智能分卷"] --> B4["世界观提取"]
+    subgraph B["novel init —— 自动拆书"]
+        B1["章节摘要"] --> B2["卷纲"] --> B4["大纲 + 世界观"]
     end
 
     B --> C
 
-    subgraph C["novel novel-outline"]
-        C1["参考大纲 + 世界观 + 创作方向"] --> C2["新小说大纲 + 新世界观"]
+    subgraph C["novel novel-outline —— 创建新小说"]
+        C1["用户灵感"] --> C2["新小说大纲 + 新世界观"] 
     end
 
     C --> D
 
-    subgraph D["novel volume-outline — 逐卷"]
-        D1["新大纲 + 参考卷纲 + 世界观"] --> D2["新卷纲 + 卷世界观"]
+    subgraph D["novel volume-outline — 逐卷生成"]
+        D1["新卷纲 + 卷世界观"]
     end
 
     D --> E
 
-    subgraph E["novel chapter-outlines — 两阶段"]
-        E1["阶段1: 卷纲 → 批次摘要"] --> E2["阶段2: 批次摘要 → 逐章章纲"]
+    subgraph E["novel chapter-outlines — 章纲生成"]
+        E1["章节摘要"] --> E2["章纲"]
     end
 
     E --> F
 
     subgraph F["novel write — 逐章生成正文"]
-        F1["卷纲 + 批次摘要 + 前文 + 章纲"] --> F2["✨ 正文"]
+        F1["文风 + 写作规范"] --> F2["✨ 正文"]
     end
 ```
 
