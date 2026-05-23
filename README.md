@@ -96,46 +96,37 @@
 ## 安装
 
 ```bash
-git clone https://github.com/XTmingyue/harnessNovel.git
-cd harnessNovel
-
-# macOS / Linux
-./setup.sh
-
-# Windows
-setup.bat
+pip install harnessNovel
 ```
 
-安装脚本会自动创建虚拟环境、安装依赖，并注册全局命令 `novel`，安装后可在任意目录直接使用。
+安装后 `novel` 命令全局可用。
 
 ## 配置
 
-复制模板并填入你的 LLM API 配置：
-
 ```bash
-cp .env.example .env
+novel config
 ```
 
-编辑 `.env`：
+执行后会自动创建全局配置文件 `~/.harnessNovel/.env`，编辑该文件填入你的 API Key：
 
 ```ini
 # 参考小说批次摘要提取（建议 flash 模型，速度快、成本低）
-DATA_BUILDER_MODEL=deepseek-v4-flash
+DATA_BUILDER_MODEL=deepseek-chat
 DATA_BUILDER_BASE_URL=https://api.deepseek.com
 DATA_BUILDER_API_KEY=your-api-key
 
 # 仿写辅助任务：世界观提取（建议 flash 模型）
-ADAPTIVE_BUILDER_LITE_MODEL=deepseek-v4-flash
+ADAPTIVE_BUILDER_LITE_MODEL=deepseek-chat
 ADAPTIVE_BUILDER_LITE_BASE_URL=https://api.deepseek.com
 ADAPTIVE_BUILDER_LITE_API_KEY=your-api-key
 
 # 仿写核心任务：大纲、卷纲、章纲、正文（建议 pro 模型，质量高）
-ADAPTIVE_BUILDER_MODEL=deepseek-v4-pro
+ADAPTIVE_BUILDER_MODEL=deepseek-chat
 ADAPTIVE_BUILDER_BASE_URL=https://api.deepseek.com
 ADAPTIVE_BUILDER_API_KEY=your-api-key
 ```
 
-也可通过同名环境变量覆盖 `.env` 中的配置。三组配置可使用不同的模型和服务商。
+也可通过同名环境变量覆盖配置。三组配置可使用不同的模型和服务商。
 
 ## 快速开始
 
@@ -160,6 +151,7 @@ novel write 我的新小说 --volume 1
 
 | 命令                                                                    | 说明                 |
 | --------------------------------------------------------------------- | ------------------ |
+| `novel config`                                                        | 初始化全局配置文件          |
 | `novel list`                                                          | 列出所有工作区            |
 | `novel init <ws> --txt <path> [--batch-size N]`                       | 创建工作区，自动拆书 + 世界观提取 |
 | `novel novel-outline <ws> [--direction TEXT] [--direction-file PATH]` | 生成新小说大纲和全书世界观      |

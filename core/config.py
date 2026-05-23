@@ -1,23 +1,28 @@
 import os
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_GLOBAL_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".harnessNovel")
+_GLOBAL_ENV_PATH = os.path.join(_GLOBAL_CONFIG_DIR, ".env")
 
 
 def _load_env():
-    """从项目根目录读取 .env 文件为字典。"""
-    env_path = os.path.join(_PROJECT_ROOT, ".env")
-    env = {}
-    if not os.path.exists(env_path):
+    """按优先级查找 .env：当前目录 → ~/.harnessNovel/.env"""
+    for env_path in [
+        os.path.join(os.getcwd(), ".env"),
+        _GLOBAL_ENV_PATH,
+    ]:
+        env = {}
+        if not os.path.exists(env_path):
+            continue
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    env[key.strip()] = value.strip()
         return env
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, value = line.split("=", 1)
-                env[key.strip()] = value.strip()
-    return env
+    return {}
 
 
 class ConfigLoader:

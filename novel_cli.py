@@ -7,6 +7,35 @@ import argparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
 
+def cmd_config(args):
+      """初始化全局配置文件 ~/.harnessNovel/.env"""
+      import os
+      config_dir = os.path.join(os.path.expanduser("~"), ".harnessNovel")
+      env_path = os.path.join(config_dir, ".env")
+      if os.path.exists(env_path) and not args.force:
+          print(f"配置文件已存在：{env_path}")
+          print("使用 --force 覆盖")
+          return
+      os.makedirs(config_dir, exist_ok=True)
+      template = """# 参考小说批次摘要提取（init 流程，建议 flash 模型）
+  DATA_BUILDER_MODEL=deepseek-chat
+  DATA_BUILDER_BASE_URL=https://api.deepseek.com
+  DATA_BUILDER_API_KEY=your-api-key
+
+  # 仿写核心任务：大纲、卷纲、章纲、正文（建议 pro 模型）
+  ADAPTIVE_BUILDER_MODEL=deepseek-chat
+  ADAPTIVE_BUILDER_BASE_URL=https://api.deepseek.com
+  ADAPTIVE_BUILDER_API_KEY=your-api-key
+
+  # 仿写辅助任务：世界观提取（建议 flash 模型）
+  ADAPTIVE_BUILDER_LITE_MODEL=deepseek-chat
+  ADAPTIVE_BUILDER_LITE_BASE_URL=https://api.deepseek.com
+  ADAPTIVE_BUILDER_LITE_API_KEY=your-api-key
+  """
+      with open(env_path, "w", encoding="utf-8") as f:
+          f.write(template)
+      print(f"配置文件已创建：{env_path}")
+      print("请编辑该文件，填入你的 API Key")
 
 def cmd_list(args):
     from core.workspace import list_novels
@@ -117,6 +146,10 @@ def main():
     )
     sub = parser.add_subparsers(dest="command", help="子命令")
 
+    # config
+    p = sub.add_parser("config", help="初始化全局配置文件")
+    p.add_argument("--force", action="store_true", help="覆盖已有配置")
+
     # list
     sub.add_parser("list", help="列出所有工作区")
 
@@ -166,6 +199,7 @@ def main():
         "volume-outline": cmd_volume_outline,
         "chapter-outlines": cmd_chapter_outlines,
         "write": cmd_write,
+        "config": cmd_config
     }
     dispatch[args.command](args)
 
