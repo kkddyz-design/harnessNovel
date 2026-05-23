@@ -1,8 +1,11 @@
 import os
 
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-def _load_env(env_path=".env"):
-    """读取 .env 文件为字典。"""
+
+def _load_env():
+    """从项目根目录读取 .env 文件为字典。"""
+    env_path = os.path.join(_PROJECT_ROOT, ".env")
     env = {}
     if not os.path.exists(env_path):
         return env

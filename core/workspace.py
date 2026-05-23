@@ -1,8 +1,7 @@
 import os
 
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NOVELS_DIR = os.path.join(PROJECT_ROOT, "novels")
+NOVELS_DIR = os.path.join(os.getcwd(), "my-novels")
 
 
 class NovelWorkspace:
