@@ -76,38 +76,9 @@
 2. **仿写阶段**：输入你的核心灵感 + 拆书结果，让 AI 在"站在巨人肩膀上"的基础上进行创作。
 3. **迭代优化**：随时调整大纲、世界观、章节内容，逐步完善作品。
 
-```mermaid
-flowchart TB
-    A["📄 参考小说.txt"] --> B
-
-    subgraph B["novel init —— 自动拆书"]
-        B1["章节摘要"] --> B2["卷纲"] --> B4["大纲 + 世界观"]
-    end
-
-    B --> C
-
-    subgraph C["novel novel-outline —— 创建新小说"]
-        C1["用户灵感"] --> C2["新小说大纲 + 新世界观"] 
-    end
-
-    C --> D
-
-    subgraph D["novel volume-outline — 逐卷生成"]
-        D1["新卷纲 + 卷世界观"]
-    end
-
-    D --> E
-
-    subgraph E["novel chapter-outlines — 章纲生成"]
-        E1["章节摘要"] --> E2["章纲"]
-    end
-
-    E --> F
-
-    subgraph F["novel write — 逐章生成正文"]
-        F1["文风 + 写作规范"] --> F2["✨ 正文"]
-    end
-```
+<p align="center">
+  <img src="docs/workflow.png" width="720" alt="工作流程">
+</p>
 
 ## 特性
 
