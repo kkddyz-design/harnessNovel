@@ -4,7 +4,7 @@
   <img src="docs/name.png" width="300">
 </p>
 
-<h2 align="center">长篇网络小说 AI 仿写系统</h2>
+<h2 align="center">长篇网络小说写作 AI Agent</h2>
 
 <div align="center">
 
@@ -172,6 +172,16 @@ novel write 我的新小说 --volume 1
 - `--start N`：起始章节号，默认 1（仅 write）
 - `--max N`：最大生成章节数（仅 write）
 - `--force`：强制重新生成，覆盖已有内容
+
+
+## 关于作者
+
+飞鸟 one the way — 探索者
+
+<p align="left">
+  <img src="docs/qrcode.png" width="200" alt="公众号二维码">
+</p>
+
 
 ## License
 
