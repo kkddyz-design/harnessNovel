@@ -1,22 +1,14 @@
 @echo off
 chcp 65001 >nul 2>&1
-setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
 REM ── 检查 Python 3.9+ ─────────────────────────────────────
 set PYTHON=
-python -c "import sys; assert sys.version_info >= (3,9)" >nul 2>&1
-if !errorlevel! equ 0 (
-    set PYTHON=python
-) else (
-    py -c "import sys; assert sys.version_info >= (3,9)" >nul 2>&1
-    if !errorlevel! equ 0 (
-        set PYTHON=py
-    )
-)
+python -c "import sys; assert sys.version_info >= (3,9)" >nul 2>&1 && set PYTHON=python
+if "%PYTHON%"=="" py -c "import sys; assert sys.version_info >= (3,9)" >nul 2>&1 && set PYTHON=py
 
-if not defined PYTHON (
+if "%PYTHON%"=="" (
     echo 错误：未检测到 Python 3.9+
     echo.
     echo 请先安装 Python：
@@ -26,13 +18,14 @@ if not defined PYTHON (
     exit /b 1
 )
 
-for /f "tokens=*" %%v in ('!PYTHON! --version') do echo 检测到 Python: %%v
+echo 检测到 Python:
+%PYTHON% --version
 
 REM ── 创建虚拟环境 ─────────────────────────────────────────
 if not exist ".venv" (
     echo 正在创建虚拟环境...
-    !PYTHON! -m venv .venv
-    if !errorlevel! neq 0 (
+    %PYTHON% -m venv .venv
+    if errorlevel 1 (
         echo 错误：创建虚拟环境失败
         pause
         exit /b 1
@@ -52,12 +45,12 @@ echo "%~dp0.venv\Scripts\novel.exe" %%*
 
 REM ── 注册全局命令 novel ──────────────────────────────────
 set "PROJECT_DIR=%~dp0"
-if "!PROJECT_DIR:~-1!"=="\" set "PROJECT_DIR=!PROJECT_DIR:~0,-1!"
+if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 
-echo %PATH% | findstr /i /c:"!PROJECT_DIR!" >nul
-if !errorlevel! neq 0 (
+echo %PATH% | findstr /i /c:"%PROJECT_DIR%" >nul
+if errorlevel 1 (
     echo 正在注册全局命令 novel ...
-    setx PATH "!PATH!;!PROJECT_DIR!" >nul
+    powershell -Command "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';%PROJECT_DIR%', 'User')"
     echo 已将项目目录添加到用户 PATH
     echo 请重新打开终端窗口后生效
 )
