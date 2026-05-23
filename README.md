@@ -8,8 +8,8 @@
 
 <div align="center">
 
-[!\[Python 3.9+\](https://img.shields.io/badge/Python-3.9%2B-blue.svg null)](https://www.python.org/)
-[!\[License: GPL-3.0\](https://img.shields.io/badge/License-GPL--3.0-green.svg null)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-green.svg)](LICENSE)
 
 </div>
 
