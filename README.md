@@ -147,6 +147,11 @@ novel chapter-outlines 我的新小说 --volume 1
 novel write 我的新小说 --volume 1
 ```
 
+## 注意
+
+- 参考小说的格式目前仅支持txt格式，编码需采用utf-8
+
+
 ## 命令参考
 
 | 命令                                                                    | 说明                 |
