@@ -1,10 +1,10 @@
-[English](README_EN.md) | 中文
-
 <p align="center">
   <img src="docs/logo.png" width="100">
   &nbsp;&nbsp;
   <img src="docs/name.png" width="300">
 </p>
+
+<h1 align="center">AI Agent for Long-form Web Novel Writing</h1>
 
 <h2 align="center">长篇网络小说写作 AI Agent</h2>
 
@@ -14,6 +14,14 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-green.svg)](LICENSE)
 
 </div>
+
+<div align="center">
+
+[English](README_EN.md) | 中文
+
+</div>
+
+
 
 ***
 
