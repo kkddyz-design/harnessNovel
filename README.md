@@ -145,7 +145,7 @@ ADAPTIVE_BUILDER_API_KEY=your-api-key
 novel init 我的新小说 --txt 参考小说.txt
 
 # 2. 生成新小说大纲 + 全书世界观
-novel novel-outline 我的新小说
+novel novel-outline 我的新小说 --direction "灵感输入"
 
 # 3. 生成卷纲 + 每卷世界观
 novel volume-outline 我的新小说 --volume 1
