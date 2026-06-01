@@ -5,6 +5,28 @@ import sys
 import os
 import argparse
 
+"""
+    一句话总结：把当前脚本所在目录加入Python搜索路径，让你能顺利导入同目录的模块。
+        ① __file__
+        表示当前脚本文件自身的路径。
+        ② os.path.abspath(__file__)
+        获取当前文件的绝对路径（完整路径）。
+        ③ os.path.dirname(...)
+        获取当前文件所在的文件夹路径。
+        ④ os.path.join(...)
+        拼接成标准路径（兼容 Windows / Linux / Mac）。
+        ⑤ sys.path.insert(0, 路径)
+        把这个文件夹路径插入到 Python 模块搜索路径列表的最前面。确保优先使用当前目录的模块,避免和系统模块重名导致冲突,保证项目内的导入稳定可靠.
+
+    现代简化写法
+        from pathlib import Path
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+
+    
+
+
+"""
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
 
 def cmd_config(args):
@@ -12,6 +34,7 @@ def cmd_config(args):
       import os
       config_dir = os.path.join(os.path.expanduser("~"), ".harnessNovel")
       env_path = os.path.join(config_dir, ".env")
+      # args.force 是一个布尔值：用户输入了 --force → args.force = True 用户没输入 → args.force = False
       if os.path.exists(env_path) and not args.force:
           print(f"配置文件已存在：{env_path}")
           print("使用 --force 覆盖")
