@@ -13,9 +13,14 @@ class LLMProvider:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.max_tokens = max_tokens
         self.log = get_logger()
+        self._mock = (self.api_key == "mock" or model == "mock")
 
-        if self.api_key:
-            self.log.info(f"LLMProvider 初始化：model={model}, base_url={base_url}, api_key=***{self.api_key[-4:]}")
+        if self._mock:
+            self.log.info(f"LLMProvider：Mock 模式启用（model={model}），返回模拟数据用于测试。")
+            self.client = None
+        elif self.api_key:
+            suffix = self.api_key[-4:] if len(self.api_key) >= 4 else "****"
+            self.log.info(f"LLMProvider 初始化：model={model}, base_url={base_url}, api_key=***{suffix}")
             self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         else:
             self.log.info(f"LLMProvider：未配置 api_key，将无法调用 API（model={model}）")
@@ -23,6 +28,12 @@ class LLMProvider:
 
     def generate(self, prompt, temperature=0.7, is_json=False, max_retries=2, max_tokens=None):
         self.log.info(f"LLMProvider.generate() model={self.model} temp={temperature} json={is_json}")
+
+        if self._mock:
+            self.log.info(f"LLMProvider.generate() MOCK — returning placeholder content")
+            if is_json:
+                return '{"message": "Mock 响应 — 未配置真实 API Key。请设置后重试。"}'
+            return "（Mock 响应 — 未配置真实 API Key。请在配置页面设置 API Key 后重试。）"
 
         if not self.client:
             raise RuntimeError("未配置有效的 API Key，无法调用 LLM。请在配置页面设置 API Key。")

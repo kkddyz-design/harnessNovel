@@ -1,5 +1,22 @@
 import json
+import os
 import re
+
+
+def read_file(path):
+    """安全读取文件内容，不存在时返回 None。"""
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+    return content if content else None
+
+
+def write_file(path, content):
+    """写入文件内容，自动创建父目录。"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content + "\n")
 
 
 def clean_markdown_symbols(text: str) -> str:

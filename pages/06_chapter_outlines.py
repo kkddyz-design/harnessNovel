@@ -1,8 +1,6 @@
 """章纲生成页面。"""
 
 import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import streamlit as st
 from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector

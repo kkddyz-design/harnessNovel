@@ -46,3 +46,15 @@
 {"ts": "00:24:06.070", "level": "INFO", "message": "token 用量：prompt=23, completion=936"}
 {"ts": "00:24:06.071", "level": "SUCCESS", "message": "API 调用成功 (qwen3.5-9b-deepseek-v4-flash@q8_0)"}
 {"ts": "00:24:06.073", "level": "SUCCESS", "message": "测试连接成功，模型返回：你好，harnessNovel，很高兴认识你！"}
+{"ts": "01:13:20.235", "level": "INFO", "message": "测试连接：group=Data Builder（拆书）, model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1"}
+{"ts": "01:13:20.236", "level": "INFO", "message": "api_key 长度=6, 是否为空=False, 前4位=1234"}
+{"ts": "01:13:20.242", "level": "INFO", "message": "LLMProvider 初始化：model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1, api_key=***3456"}
+{"ts": "01:13:20.276", "level": "INFO", "message": "LLMProvider.generate() model=qwen3.5-9b-deepseek-v4-flash@q8_0 temp=0.3 json=False"}
+{"ts": "01:13:20.276", "level": "LLM_REQ", "message": "→ qwen3.5-9b-deepseek-v4-flash@q8_0 @ http://localhost:1234/v1", "detail": "请用一句中文回复：你好，我是harnessNovel。"}
+{"ts": "01:13:28.259", "level": "ERROR", "message": "API 调用失败 (attempt 1): status=503, error=Error code: 503"}
+{"ts": "01:13:28.261", "level": "INFO", "message": "重试中... (1/2)"}
+{"ts": "01:13:36.364", "level": "ERROR", "message": "API 调用失败 (attempt 2): status=503, error=Error code: 503"}
+{"ts": "01:13:36.366", "level": "INFO", "message": "重试中... (2/2)"}
+{"ts": "01:13:44.237", "level": "ERROR", "message": "API 调用失败 (attempt 3): status=503, error=Error code: 503"}
+{"ts": "01:13:44.239", "level": "ERROR", "message": "已达最大重试次数 2"}
+{"ts": "01:13:44.241", "level": "ERROR", "message": "测试连接异常：InternalServerError: Error code: 503"}

@@ -7,8 +7,6 @@ import time
 import queue
 import threading
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-
 import streamlit as st
 from core.workspace import init_workspace
 from ui.utils import render_sidebar, workspace_selector, detect_encoding, TeeStdout

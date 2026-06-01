@@ -12,6 +12,7 @@
         5. 你的项目变成正式软件，可以发布到全世界
 """
 from setuptools import setup, find_packages
+import os
 
 # 开始配置项目打包信息
 setup(
@@ -28,7 +29,7 @@ setup(
     description="长篇网络小说写作 AI Agent",
     
     # 【长描述】从 README.md 读取详细介绍（展示在 PyPI 上）
-    long_description=open("README.md", encoding="utf-8").read(),
+    long_description=(lambda: open("README.md", encoding="utf-8").read() if os.path.exists("README.md") else "")(),
     
     # 告诉系统长描述是 Markdown 格式
     long_description_content_type="text/markdown",
@@ -38,10 +39,22 @@ setup(
     
     # 开源协议：GPL-3.0（常用开源协议）
     license="GPL-3.0",
+
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Text Processing :: Linguistic",
+    ],
     
     # 【自动发现所有包】
     # 会自动找到 core/ training/ agents/ 等文件夹
-    packages=find_packages(),
+    packages=find_packages() + ["pages"],
     
     # 【独立脚本模块】
     # 把根目录的 novel_cli.py 注册成可导入模块
@@ -64,9 +77,10 @@ setup(
     },
     
     # 【项目依赖】
-    # 安装本项目时，自动安装 openai 库
+    # 安装本项目时，自动安装 openai 和 streamlit
     install_requires=[
         "openai",
+        "streamlit",
     ],
     
     # 要求 Python 版本 ≥3.9

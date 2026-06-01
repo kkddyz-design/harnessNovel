@@ -3,6 +3,8 @@ import re
 import glob
 import json
 
+from core.text_utils import read_file
+
 
 DEFAULT_OUTLINES_DIR = os.path.join(os.path.dirname(__file__), 'data', 'outlines')
 
@@ -89,12 +91,6 @@ def load_reference_volume_outline(outlines_dir=None, vol_idx=1):
     return ""
 
 
-def _read_file(path):
-    if not os.path.exists(path):
-        return ""
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read().strip()
-
 
 def find_reference_batch(outlines_dir, vol_idx, prod_start, prod_end,
                          prod_vol_total, ref_vol_total=None):
@@ -154,7 +150,7 @@ def find_reference_batch(outlines_dir, vol_idx, prod_start, prod_end,
         batch_end = int(bm.group(2))
         # 检查是否有重叠
         if batch_end >= ref_start and batch_start <= ref_end:
-            content = _read_file(bf)
+            content = read_file(bf)
             if content:
                 batch_contents.append(content)
 
@@ -190,7 +186,7 @@ def find_reference_chapter_outlines(outlines_dir, vol_idx, start_ch, end_ch):
     outlines = []
     for ch_num in range(start_ch, end_ch + 1):
         ch_file = os.path.join(ch_dir, f"chapter_{ch_num:03d}.md")
-        content = _read_file(ch_file)
+        content = read_file(ch_file)
         if content:
             outlines.append(f"【参考第{ch_num}章章纲】\n{content}")
 

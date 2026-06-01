@@ -1,51 +1,32 @@
-import json
-from .base_agent import BaseAgent
+from .comparison_agent import ComparisonAgent
 from core.prompt_loader import PromptLoader
-from core.text_utils import parse_json_response
 
-class ChapterComparisonAgent(BaseAgent):
+
+_CHAPTER_SCORE_FIELDS = ["plot_push_score", "character_arc_score", "conflict_score",
+                          "suspense_score", "detail_granularity_score"]
+_CHAPTER_SCORE_COUNT = len(_CHAPTER_SCORE_FIELDS)
+
+
+class ChapterComparisonAgent(ComparisonAgent):
     def __init__(self, base_url=None, api_key=None, model=None):
-        super().__init__(name="Chapter Comparison Agent", base_url=base_url, api_key=api_key, model=model)
+        super().__init__(base_url=base_url, api_key=api_key, model=model)
+        self.name = "Chapter Comparison Agent"
 
     def evaluate_training_sample(self, generated_content, target_label, context, max_retries=2):
-        """
-        用于训练 Pipeline：调用大模型自动审计生成的章纲与真实的章纲（Label）。
-        带重试机制，最多重试 max_retries 次。
-        """
-        prompt = PromptLoader.load(
-            "chapter_comparison_evaluate",
-            context=context,
-            target_label=target_label,
-            generated_content=generated_content
-        )
+        prompt = PromptLoader.load("chapter_comparison_evaluate", context=context,
+                                   target_label=target_label, generated_content=generated_content)
+        result_json = self._generate_json_with_retry(prompt, max_retries)
 
-        for attempt in range(max_retries + 1):
-            result_str = self.llm.generate(prompt, is_json=True)
-            try:
-                result_json = parse_json_response(result_str)
+        if not result_json:
+            fallback = dict.fromkeys(_CHAPTER_SCORE_FIELDS + ["average_score"], 0)
+            fallback.update({"feedback": "大模型审计输出格式异常，未能提取有效反馈。",
+                             "attribution": "drafting_error", "attribution_detail": "",
+                             "rule_suggestions": []})
+            return fallback
 
-                total_score = (
-                    result_json.get("plot_push_score", 0) +
-                    result_json.get("character_arc_score", 0) +
-                    result_json.get("conflict_score", 0) +
-                    result_json.get("suspense_score", 0) +
-                    result_json.get("detail_granularity_score", 0)
-                ) / 5.0
-
-                result_json["average_score"] = total_score
-                result_json.setdefault("attribution", "drafting_error")
-                result_json.setdefault("attribution_detail", "")
-                result_json.setdefault("rule_suggestions", [])
-                return result_json
-            except Exception as e:
-                if attempt < max_retries:
-                    print(f"[{self.name}] 评分 JSON 解析失败（第{attempt+1}次），重试中... 错误: {e}")
-                else:
-                    print(f"[{self.name}] 评分 JSON 解析失败，已重试{max_retries}次。错误: {e}")
-                    return {
-                        "plot_push_score": 0, "character_arc_score": 0, "conflict_score": 0,
-                        "suspense_score": 0, "detail_granularity_score": 0,
-                        "average_score": 0, "feedback": f"大模型审计输出格式异常，未能提取有效反馈。原始内容: {result_str}",
-                        "attribution": "drafting_error", "attribution_detail": "",
-                        "rule_suggestions": []
-                    }
+        total_score = sum(result_json.get(f, 0) for f in _CHAPTER_SCORE_FIELDS) / _CHAPTER_SCORE_COUNT
+        result_json["average_score"] = total_score
+        result_json.setdefault("attribution", "drafting_error")
+        result_json.setdefault("attribution_detail", "")
+        result_json.setdefault("rule_suggestions", [])
+        return result_json

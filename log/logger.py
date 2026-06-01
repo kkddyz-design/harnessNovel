@@ -5,7 +5,8 @@ import json
 import threading
 from datetime import datetime
 
-_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+_LOG_DIR = os.path.join(os.path.expanduser("~"), ".harnessNovel", "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
 
 
 def _today_log_path():
@@ -54,12 +55,15 @@ class LogManager:
 
     def info(self, message, **kw):
         self.log("INFO", message, **kw)
+        print(message)
 
     def success(self, message, **kw):
         self.log("SUCCESS", message, **kw)
+        print(message)
 
     def error(self, message, **kw):
         self.log("ERROR", message, **kw)
+        print(message)
 
     def llm_request(self, model, base_url, prompt_preview, **kw):
         self.log("LLM_REQ", f"→ {model} @ {base_url}", detail=prompt_preview[:500], **kw)
@@ -82,6 +86,7 @@ class LogManager:
                 with open(path, "a", encoding="utf-8") as f:
                     f.write(line)
             except Exception:
+                # Log file write failed (disk full, permissions, etc.) — non-fatal
                 pass
 
     # ── GUI 集成 ──

@@ -1,4 +1,6 @@
 import os
+import string
+
 
 class PromptLoader:
     _prompts = {}
@@ -6,21 +8,40 @@ class PromptLoader:
 
     @classmethod
     def load(cls, folder_name: str, **kwargs) -> str:
-        """
-        加载指定 folder_name 下的 prompt.txt，并使用 kwargs 进行格式化。
-        这种方式支持每一个 prompt 拥有一个独立的文件夹，方便长文本阅读与修改。
-        """
         if folder_name not in cls._prompts:
             file_path = os.path.join(cls._base_dir, folder_name, "prompt.txt")
             if not os.path.exists(file_path):
-                raise FileNotFoundError(f"Prompt 模板文件未找到: {file_path}")
+                raise FileNotFoundError(f"Prompt template file not found: {file_path}")
             with open(file_path, "r", encoding="utf-8") as f:
                 cls._prompts[folder_name] = f.read()
-                
+
         template = cls._prompts[folder_name]
-            
-        # 使用 kwargs 格式化模板
         try:
             return template.format(**kwargs)
         except KeyError as e:
-            raise KeyError(f"格式化 prompt 文件夹 '{folder_name}' 时缺少必要的参数: {e}")
+            raise KeyError(
+                f"Missing required parameter {e} for prompt '{folder_name}'. "
+                f"Template expects keys: {cls._extract_keys(template)}"
+            )
+        except ValueError as e:
+            raise ValueError(
+                f"Format error in prompt '{folder_name}': {e}. "
+                "Template may contain literal '{' or '}' — use '{{' and '}}' to escape."
+            )
+
+    @classmethod
+    def _extract_keys(cls, template: str) -> list:
+        """Extract all {key} placeholders from a template string."""
+        formatter = string.Formatter()
+        return [f[1] for f in formatter.parse(template) if f[1]]
+
+    @classmethod
+    def validate(cls, folder_name: str) -> list:
+        """Validate a prompt template returns missing keys or empty list if OK."""
+        file_path = os.path.join(cls._base_dir, folder_name, "prompt.txt")
+        if not os.path.exists(file_path):
+            return [f"Template not found: {file_path}"]
+        with open(file_path, "r", encoding="utf-8") as f:
+            template = f.read()
+        cls._prompts[folder_name] = template
+        return []  # Template loaded successfully; keys validated at format time

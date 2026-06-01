@@ -2,24 +2,33 @@ import os
 import json
 import re
 
+
 class ContextManager:
     def __init__(self, base_dir="file_system"):
         self.base_dir = base_dir
-        self._context_override = None  # 训练数据注入的上下文数据字典
+        self._context_override = None
+        self._file_cache = {}  # path -> (mtime, content)
 
     def set_context_override(self, data: dict):
-        """注入外部上下文数据（训练时使用）。注入后优先从该字典获取，若不存在则回退到文件系统读取。"""
         self._context_override = data
+        self._file_cache.clear()
 
     def _read_file(self, rel_path, default_key=None):
         if self._context_override and default_key and default_key in self._context_override:
             return self._context_override[default_key]
-        
+
         path = os.path.join(self.base_dir, rel_path)
         if not os.path.exists(path):
             return f"[{rel_path} Not Found]"
+
+        mtime = os.path.getmtime(path)
+        if path in self._file_cache and self._file_cache[path][0] == mtime:
+            return self._file_cache[path][1]
+
         with open(path, "r", encoding="utf-8") as f:
-            return f.read().strip()
+            content = f.read().strip()
+        self._file_cache[path] = (mtime, content)
+        return content
 
     @staticmethod
     def extract_relevant_volume_outline(full_outline, current_chapter, include_next=True):
