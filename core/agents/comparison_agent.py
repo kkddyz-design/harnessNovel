@@ -4,7 +4,7 @@ from core.prompt_loader import PromptLoader
 from core.text_utils import parse_json_response
 
 class ComparisonAgent(BaseAgent):
-    def __init__(self, base_url=None, api_key=None, model="mock-model"):
+    def __init__(self, base_url=None, api_key=None, model=None):
         super().__init__(name="Comparison Agent", base_url=base_url, api_key=api_key, model=model)
 
     def audit_draft(self, draft, chapter_intent, context):

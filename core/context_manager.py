@@ -5,18 +5,15 @@ import re
 class ContextManager:
     def __init__(self, base_dir="file_system"):
         self.base_dir = base_dir
-        self.mock_data = None  # 用于存放从训练数据注入的上下文数据字典
+        self._context_override = None  # 训练数据注入的上下文数据字典
 
-    def set_mock_data(self, mock_data: dict):
-        """
-        为 ContextManager 注入外部模拟数据（训练时使用）。
-        一旦注入，将优先从该字典中获取，若不存在，则依然回退到文件系统读取。
-        """
-        self.mock_data = mock_data
+    def set_context_override(self, data: dict):
+        """注入外部上下文数据（训练时使用）。注入后优先从该字典获取，若不存在则回退到文件系统读取。"""
+        self._context_override = data
 
     def _read_file(self, rel_path, default_key=None):
-        if self.mock_data and default_key and default_key in self.mock_data:
-            return self.mock_data[default_key]
+        if self._context_override and default_key and default_key in self._context_override:
+            return self._context_override[default_key]
         
         path = os.path.join(self.base_dir, rel_path)
         if not os.path.exists(path):
@@ -85,10 +82,10 @@ class ContextManager:
         """
         核心层：System prompt（作家的写作风格）
         """
-        if self.mock_data and "system_prompt" in self.mock_data:
-            system_prompt = self.mock_data["system_prompt"]
+        if self._context_override and "system_prompt" in self._context_override:
+            system_prompt = self._context_override["system_prompt"]
         elif not system_prompt:
-            # 如果没有传入，并且没有 mock 数据，则尝试从文件中读取
+            # 如果没有传入，并且没有 context_override 数据，则尝试从文件中读取
             system_prompt = self._read_file("system_prompt.md", "system_prompt")
             # 如果文件不存在，则提供一个默认 fallback
             if "[system_prompt.md Not Found]" in system_prompt:
@@ -103,16 +100,16 @@ class ContextManager:
         # 兼容正文训练和章纲训练：如果字典里有 chapter_agents_md，就用章纲规范；
         # 否则尝试加载 agents_md，如果没有则为空。
         rules_text = ""
-        if self.mock_data and "chapter_agents_md" in self.mock_data:
-            chapter_agents_md = self.mock_data["chapter_agents_md"]
+        if self._context_override and "chapter_agents_md" in self._context_override:
+            chapter_agents_md = self._context_override["chapter_agents_md"]
             rules_text = f"--- 章纲写作规范 (CHAPTER_AGENTS.md) ---\n{chapter_agents_md}\n\n"
             # 章纲生成时也注入正文写作规范作为风格约束
-            if self.mock_data.get("agents_md"):
-                rules_text += f"--- 正文写作规范（章纲须遵照此风格规划内容） ---\n{self.mock_data['agents_md']}\n\n"
+            if self._context_override.get("agents_md"):
+                rules_text += f"--- 正文写作规范（章纲须遵照此风格规划内容） ---\n{self._context_override['agents_md']}\n\n"
         else:
-            # 兼容老流程，如果没有传入 mock_data 或者有 mock_data 但没有剔除 agents_md
-            # 如果 mock_data 里显式把 agents_md 设为 None 或不在字典里，就不加载
-            if self.mock_data is not None and "agents_md" not in self.mock_data:
+            # 兼容老流程，如果没有传入 context_override 或者有 context_override 但没有剔除 agents_md
+            # 如果 context_override 里显式把 agents_md 设为 None 或不在字典里，就不加载
+            if self._context_override is not None and "agents_md" not in self._context_override:
                 pass
             else:
                 agents_md = self._read_file("AGENTS.md", "agents_md")
@@ -173,8 +170,8 @@ class ContextManager:
         
         # 获取近N章内容
         recent_chapters_content = ""
-        if self.mock_data and "recent_chapters_content" in self.mock_data:
-            recent_chapters_content = self.mock_data["recent_chapters_content"]
+        if self._context_override and "recent_chapters_content" in self._context_override:
+            recent_chapters_content = self._context_override["recent_chapters_content"]
         else:
             chapters_dir = os.path.join(self.base_dir, "history/chapters")
             if os.path.exists(chapters_dir):

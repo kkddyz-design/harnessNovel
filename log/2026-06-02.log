@@ -1,0 +1,48 @@
+{"ts": "00:00:55.630", "level": "INFO", "message": "测试连接：group=Data Builder（拆书）, model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1"}
+{"ts": "00:00:55.641", "level": "INFO", "message": "api_key 长度=6, 是否为空=False, 前4位=1234"}
+{"ts": "00:00:55.643", "level": "INFO", "message": "LLMProvider 初始化：model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1, api_key=***3456"}
+{"ts": "00:00:55.656", "level": "INFO", "message": "LLMProvider.generate() model=qwen3.5-9b-deepseek-v4-flash@q8_0 temp=0.3 json=False"}
+{"ts": "00:00:55.656", "level": "LLM_REQ", "message": "→ qwen3.5-9b-deepseek-v4-flash@q8_0 @ http://localhost:1234/v1", "detail": "请用一句中文回复：你好，我是harnessNovel。"}
+{"ts": "00:01:11.048", "level": "ERROR", "message": "API 调用失败 (attempt 1): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:01:11.049", "level": "INFO", "message": "重试中... (1/2)"}
+{"ts": "00:01:22.233", "level": "ERROR", "message": "API 调用失败 (attempt 2): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:01:22.234", "level": "INFO", "message": "重试中... (2/2)"}
+{"ts": "00:01:46.050", "level": "ERROR", "message": "API 调用失败 (attempt 3): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:01:46.051", "level": "ERROR", "message": "已达最大重试次数 2"}
+{"ts": "00:01:46.052", "level": "INFO", "message": "使用 Mock 模式返回"}
+{"ts": "00:01:46.054", "level": "ERROR", "message": "测试连接返回 Mock 内容：LLM生成的通用回复内容。"}
+{"ts": "00:02:15.914", "level": "INFO", "message": "测试连接：group=Data Builder（拆书）, model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1"}
+{"ts": "00:02:15.914", "level": "INFO", "message": "api_key 长度=6, 是否为空=False, 前4位=1234"}
+{"ts": "00:02:15.916", "level": "INFO", "message": "LLMProvider 初始化：model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1, api_key=***3456"}
+{"ts": "00:02:15.929", "level": "INFO", "message": "LLMProvider.generate() model=qwen3.5-9b-deepseek-v4-flash@q8_0 temp=0.3 json=False"}
+{"ts": "00:02:15.929", "level": "LLM_REQ", "message": "→ qwen3.5-9b-deepseek-v4-flash@q8_0 @ http://localhost:1234/v1", "detail": "请用一句中文回复：你好，我是harnessNovel。"}
+{"ts": "00:02:37.189", "level": "ERROR", "message": "API 调用失败 (attempt 1): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:02:37.190", "level": "INFO", "message": "重试中... (1/2)"}
+{"ts": "00:02:57.173", "level": "ERROR", "message": "API 调用失败 (attempt 2): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:02:57.174", "level": "INFO", "message": "重试中... (2/2)"}
+{"ts": "00:03:25.116", "level": "ERROR", "message": "API 调用失败 (attempt 3): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:03:25.117", "level": "ERROR", "message": "已达最大重试次数 2"}
+{"ts": "00:03:25.118", "level": "INFO", "message": "使用 Mock 模式返回"}
+{"ts": "00:03:25.120", "level": "ERROR", "message": "测试连接返回 Mock 内容：LLM生成的通用回复内容。"}
+{"ts": "00:15:41.462", "level": "INFO", "message": "测试连接：group=Data Builder（拆书）, model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1"}
+{"ts": "00:15:41.463", "level": "INFO", "message": "api_key 长度=6, 是否为空=False, 前4位=1234"}
+{"ts": "00:15:41.464", "level": "INFO", "message": "LLMProvider 初始化：model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1, api_key=***3456"}
+{"ts": "00:15:41.477", "level": "INFO", "message": "LLMProvider.generate() model=qwen3.5-9b-deepseek-v4-flash@q8_0 temp=0.3 json=False"}
+{"ts": "00:15:41.477", "level": "LLM_REQ", "message": "→ qwen3.5-9b-deepseek-v4-flash@q8_0 @ http://localhost:1234/v1", "detail": "请用一句中文回复：你好，我是harnessNovel。"}
+{"ts": "00:16:26.091", "level": "ERROR", "message": "API 调用失败 (attempt 1): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:16:26.092", "level": "INFO", "message": "重试中... (1/2)"}
+{"ts": "00:16:42.382", "level": "ERROR", "message": "API 调用失败 (attempt 2): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:16:42.383", "level": "INFO", "message": "重试中... (2/2)"}
+{"ts": "00:16:57.204", "level": "ERROR", "message": "API 调用失败 (attempt 3): status=None, error=log.logger.LogManager.log() got multiple values for keyword argument 'detail'"}
+{"ts": "00:16:57.205", "level": "ERROR", "message": "已达最大重试次数 2"}
+{"ts": "00:16:57.206", "level": "INFO", "message": "使用 Mock 模式返回"}
+{"ts": "00:16:57.208", "level": "SUCCESS", "message": "测试连接成功，模型返回：LLM生成的通用回复内容。"}
+{"ts": "00:23:45.065", "level": "INFO", "message": "测试连接：group=Data Builder（拆书）, model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1"}
+{"ts": "00:23:45.066", "level": "INFO", "message": "api_key 长度=6, 是否为空=False, 前4位=1234"}
+{"ts": "00:23:45.077", "level": "INFO", "message": "LLMProvider 初始化：model=qwen3.5-9b-deepseek-v4-flash@q8_0, base_url=http://localhost:1234/v1, api_key=***3456"}
+{"ts": "00:23:45.089", "level": "INFO", "message": "LLMProvider.generate() model=qwen3.5-9b-deepseek-v4-flash@q8_0 temp=0.3 json=False"}
+{"ts": "00:23:45.089", "level": "LLM_REQ", "message": "→ qwen3.5-9b-deepseek-v4-flash@q8_0 @ http://localhost:1234/v1", "detail": "请用一句中文回复：你好，我是harnessNovel。"}
+{"ts": "00:24:06.069", "level": "LLM_RESP", "message": "← qwen3.5-9b-deepseek-v4-flash@q8_0 (25 chars)", "detail": "\n\n你好，harnessNovel，很高兴认识你！"}
+{"ts": "00:24:06.070", "level": "INFO", "message": "token 用量：prompt=23, completion=936"}
+{"ts": "00:24:06.071", "level": "SUCCESS", "message": "API 调用成功 (qwen3.5-9b-deepseek-v4-flash@q8_0)"}
+{"ts": "00:24:06.073", "level": "SUCCESS", "message": "测试连接成功，模型返回：你好，harnessNovel，很高兴认识你！"}

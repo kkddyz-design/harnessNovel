@@ -152,12 +152,8 @@ if st.button("发送测试请求"):
             with st.spinner("正在请求模型..."):
                 result = llm.generate("请用一句中文回复：你好，我是harnessNovel。", temperature=0.3)
 
-            if "Mock" in result or "LLM生成的通用回复" in result:
-                st.warning("模型返回了 Mock 内容，请检查配置参数是否正确。")
-                log.error(f"测试连接返回 Mock 内容：{result[:200]}")
-            else:
-                st.success("连接成功！")
-                log.success(f"测试连接成功，模型返回：{result[:200]}")
+            st.success("连接成功！")
+            log.success(f"测试连接成功，模型返回：{result[:200]}")
             st.markdown(f"模型回复：\n\n{result}")
         except Exception as e:
             st.error(f"连接失败：{e}")

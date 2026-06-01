@@ -12,7 +12,7 @@ class TrainingPipeline:
         self.base_dir = base_dir
         self.context_manager = ContextManager(base_dir=base_dir)
 
-        default_config = {"model": "mock-model", "base_url": None, "api_key": None}
+        default_config = {"model": None, "base_url": None, "api_key": None}
         agent_configs = agent_configs or {}
 
         drafting_config = agent_configs.get("drafting", default_config)
@@ -44,7 +44,7 @@ class TrainingPipeline:
         
         # 为了避免多线程时 context_manager 状态冲突，这里临时创建一个专用的 ContextManager 实例
         local_context_manager = ContextManager(base_dir=self.base_dir)
-        local_context_manager.set_mock_data(context_data)
+        local_context_manager.set_context_override(context_data)
         full_context = local_context_manager.build_full_context()
         
         generated_content = self.drafting_agent.generate_draft(full_context)

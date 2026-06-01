@@ -4,6 +4,8 @@ import io
 import os
 import sys
 import time
+import queue
+import threading
 from contextlib import contextmanager
 
 import streamlit as st
@@ -22,6 +24,22 @@ def capture_stdout():
         yield buf
     finally:
         sys.stdout = old
+
+
+class TeeStdout(io.StringIO):
+    """同时写入 StringIO 和线程安全队列，支持实时读取输出。"""
+
+    def __init__(self, q):
+        super().__init__()
+        self._q = q
+
+    def write(self, s):
+        super().write(s)
+        if s.strip():
+            self._q.put(s)
+
+    def flush(self):
+        pass
 
 
 # ── 工作区状态检测 ──
@@ -157,7 +175,6 @@ def render_log_panel():
 
     if st.sidebar.button("🔄 刷新 / 清空", use_container_width=True):
         lm.clear()
-        st.rerun()
 
     st.sidebar.markdown(
         f"""<div style="height:200px;overflow-y:scroll;background:#1e1e1e;color:#d4d4d4;

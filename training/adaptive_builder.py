@@ -710,10 +710,11 @@ def gen_serial_chapters(ws, volume=1, start_chapter=1, max_chapters=None):
     print(f"\n  -> 卷{volume}正文生成完毕（共 {len(pending)} 章）。")
 
 
-def gen_worldview(ws):
+def gen_worldview(ws, stop_event=None):
     """按卷提取世界观，再汇总为完整世界观。"""
     from training.reference_finder import list_reference_volumes, load_reference_volume_outline
     import glob
+    from training.outline_builder import _check_stop, ImportInterrupted
 
     print(">>> 提取参考小说世界观 <<<")
 
@@ -737,6 +738,7 @@ def gen_worldview(ws):
     volume_worldviews = []
 
     for vol in ref_volumes:
+        _check_stop(stop_event)
         vol_idx = vol["vol_idx"]
         vol_title = vol["title"]
         vol_wv_path = os.path.join(worldview_dir, f"vol_{vol_idx:02d}_worldview.md")
@@ -796,6 +798,7 @@ def gen_worldview(ws):
     if len(volume_worldviews) == 1:
         _write_file(aggregated_path, volume_worldviews[0]["content"])
     else:
+        _check_stop(stop_event)
         prompt = PromptLoader.load("worldview_merge", volume_worldviews=all_wv)
         result = normalize_text(llm.generate(prompt))
         _write_file(aggregated_path, result)

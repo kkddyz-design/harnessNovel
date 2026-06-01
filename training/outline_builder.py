@@ -165,7 +165,7 @@ def _write_file(path, content):
         f.write(content + "\n")
 
 
-def extract_volume_outline(vol_idx, volume_title, chapters, llm, outlines_dir, batch_size=20):
+def extract_volume_outline(vol_idx, volume_title, chapters, llm, outlines_dir, batch_size=20, stop_event=None):
     """提取单卷卷纲。每批结果立即存盘，支持断点续传。"""
     vol_dir = os.path.join(outlines_dir, _vol_dir_name(vol_idx, volume_title))
     total = len(chapters)
@@ -174,6 +174,7 @@ def extract_volume_outline(vol_idx, volume_title, chapters, llm, outlines_dir, b
     # 1. 分批提取子纲，每批存盘
     batch_files = []
     for batch_start in range(0, total, batch_size):
+        _check_stop(stop_event)
         batch_end = min(batch_start + batch_size, total)
         batch = chapters[batch_start:batch_end]
         bfile = os.path.join(vol_dir, _batch_file_name(batch_start, batch_end))
@@ -519,7 +520,17 @@ def _load_existing_volumes(outlines_dir, groups, chapters):
     return {"volume_outlines": volume_outlines, "groups": vol_groups}
 
 
-def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapter_outlines=False):
+class ImportInterrupted(Exception):
+    """导入被用户中断。"""
+    pass
+
+
+def _check_stop(stop_event):
+    if stop_event and stop_event.is_set():
+        raise ImportInterrupted("导入已被用户停止")
+
+
+def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapter_outlines=False, stop_event=None):
     if txt_path is None:
         txt_path = os.path.join(DATA_DIR, "sample_novel.txt")
     if output_dir is None:
@@ -538,6 +549,7 @@ def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapte
     # 1. 切分章节并识别卷
     volumes, chapters = split_chapters(txt_path)
     print(f"解析出 {len(volumes)} 卷，{len(chapters)} 章，每批 {batch_size} 章。")
+    _check_stop(stop_event)
 
     # 2. 按卷分组
     groups = group_chapters_by_volume(chapters, volumes)
@@ -557,6 +569,7 @@ def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapte
         print("错误：未检测到 API Key。")
         return
     llm = LLMProvider(**builder_config)
+    _check_stop(stop_event)
 
     if existing_volumes:
         # 已有完整数据，跳过阶段一和虚拟分卷
@@ -568,8 +581,9 @@ def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapte
         print(f"\n--- 阶段一：按卷提取批次摘要和卷纲 ---")
         volume_outlines = []
         for vi, g in enumerate(groups):
+            _check_stop(stop_event)
             print(f"\n  处理：{g['title']}")
-            outline = extract_volume_outline(vi, g["title"], g["chapters"], llm, outlines_dir, batch_size)
+            outline = extract_volume_outline(vi, g["title"], g["chapters"], llm, outlines_dir, batch_size, stop_event=stop_event)
             volume_outlines.append({"title": g["title"], "outline": outline})
 
     # 汇总卷纲文件
@@ -583,7 +597,7 @@ def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapte
     # 汇总生成完整大纲
     extract_novel_outline(volume_outlines, llm, outlines_dir)
 
-def resegment(outlines_dir):
+def resegment(outlines_dir, stop_event=None):
     """基于已有批次摘要重新执行虚拟分卷。
 
     两种情况：
@@ -657,11 +671,13 @@ def resegment(outlines_dir):
 
     print(f">>> 虚拟分卷（重新分卷）<<<")
     print(f"  批次摘要：{len(batch_summaries)} 个文件，约 {total_ch} 章")
+    _check_stop(stop_event)
 
     all_batches_text = "\n\n---\n\n".join(batch_summaries)
     print(f"  -> 调用 LLM 分析批次摘要，识别卷边界...")
     seg_prompt = PromptLoader.load("virtual_volume_segment", batch_summaries=all_batches_text)
     seg_result = normalize_text(llm.generate(seg_prompt))
+    _check_stop(stop_event)
 
     virtual_volumes = _parse_virtual_volumes(seg_result)
     if not virtual_volumes:
@@ -690,6 +706,7 @@ def resegment(outlines_dir):
     # 为每个虚拟卷创建目录、复制文件、生成卷纲
     new_volume_outlines = []
     for i, (vi, vol_title, start_ch, end_ch) in enumerate(virtual_volumes):
+        _check_stop(stop_event)
         vol_dir_name = _vol_dir_name(vi - 1, vol_title)
         vol_dir = os.path.join(outlines_dir, vol_dir_name)
 
@@ -788,6 +805,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
     # 4.5 虚拟分卷：如果只有"全书"伪卷，自动划分为虚拟卷
     need_virtual = len(groups) == 1 and groups[0]["title"] == "全书"
     if need_virtual:
+        _check_stop(stop_event)
         print(f"\n--- 虚拟分卷：全书无自然分卷，自动识别卷边界 ---")
         all_batch_dir = os.path.join(outlines_dir, _vol_dir_name(0, "全书"))
 
@@ -804,8 +822,10 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
         else:
             all_batches_text = "\n\n---\n\n".join(batch_summaries)
             print(f"  -> 调用 LLM 分析 {len(batch_summaries)} 个批次摘要，识别卷边界...")
+            _check_stop(stop_event)
             seg_prompt = PromptLoader.load("virtual_volume_segment", batch_summaries=all_batches_text)
             seg_result = normalize_text(llm.generate(seg_prompt))
+            _check_stop(stop_event)
 
             virtual_volumes = _parse_virtual_volumes(seg_result)
             if not virtual_volumes:
@@ -866,9 +886,11 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
 
     # 5. 按卷提取每章章纲（按故事片段分批，每批最多5章）
     if not skip_chapter_outlines:
+        _check_stop(stop_event)
         MAX_CHAPTERS_PER_BATCH = 5
         print(f"\n--- 阶段二：提取每章章纲（按片段分批） ---")
         for vi, g in enumerate(groups):
+            _check_stop(stop_event)
             vol_dir = os.path.join(outlines_dir, _vol_dir_name(vi, g["title"]))
             ch_outlines_dir = os.path.join(vol_dir, "chapter_outlines")
             os.makedirs(ch_outlines_dir, exist_ok=True)
@@ -903,6 +925,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
 
                     # 按 MAX_CHAPTERS_PER_BATCH 切分
                     for bi in range(0, len(seg_chapters), MAX_CHAPTERS_PER_BATCH):
+                        _check_stop(stop_event)
                         batch = seg_chapters[bi:bi + MAX_CHAPTERS_PER_BATCH]
                         ch_range = f"{batch[0][0]}-{batch[-1][0]}"
                         print(f"    -> 批量提取第{ch_range}章章纲（{len(batch)}章）...")
@@ -935,6 +958,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
                         pending.append((ch_num, ch))
 
                 for bi in range(0, len(pending), MAX_CHAPTERS_PER_BATCH):
+                    _check_stop(stop_event)
                     batch = pending[bi:bi + MAX_CHAPTERS_PER_BATCH]
                     ch_range = f"{batch[0][0]}-{batch[-1][0]}"
                     print(f"    -> 批量提取第{ch_range}章章纲（{len(batch)}章）...")
