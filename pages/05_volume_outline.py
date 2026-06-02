@@ -3,9 +3,10 @@
 import os
 
 import streamlit as st
-from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector
+from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector, render_bottom_log_panel, render_config_button
 
 render_sidebar()
+render_config_button()
 
 st.title("📖 卷纲生成")
 
@@ -69,3 +70,5 @@ summary = read_file_content(os.path.join(ws.file_system, "volume_outline.md"))
 if summary:
     with st.expander("📊 汇总卷纲（volume_outline.md）"):
         st.markdown(summary)
+
+render_bottom_log_panel()

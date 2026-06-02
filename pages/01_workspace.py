@@ -4,11 +4,12 @@ import os
 
 import streamlit as st
 from core.workspace import list_novels, init_workspace
-from ui.utils import render_sidebar, get_workspace_status
+from ui.utils import render_sidebar, get_workspace_status, render_bottom_log_panel, render_config_button
 
 st.set_page_config(page_title="工作区管理", page_icon="📌", layout="wide")
 
 ws, status = render_sidebar()
+render_config_button()
 
 st.title("📌 工作区管理")
 
@@ -61,3 +62,5 @@ else:
                 st.success("当前")
 
         st.markdown("---")
+
+render_bottom_log_panel()

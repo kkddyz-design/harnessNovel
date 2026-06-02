@@ -30,7 +30,8 @@ def _get_lite_llm():
 def gen_worldview(ws, stop_event=None):
     """按卷提取世界观，再汇总为完整世界观。"""
     from training.reference_finder import list_reference_volumes, load_reference_volume_outline
-    from training.outline_builder import _check_stop, ImportInterrupted
+    from training.outline_builder import _check_stop
+    from core.exceptions import ImportInterrupted
 
     log.info(">>> 提取参考小说世界观 <<<")
 
@@ -83,7 +84,7 @@ def gen_worldview(ws, stop_event=None):
             volume_outline=vol_outline or "（无卷纲）",
             batch_summaries=batches_text,
         )
-        result = normalize_text(llm.generate(prompt))
+        result = normalize_text(llm.generate_interruptible(prompt, stop_event))
         write_file(vol_wv_path, result)
         volume_worldviews.append({"vol_idx": vol_idx, "title": vol_title, "content": result})
         log.info(f"  卷{vol_idx}世界观已保存")
@@ -109,7 +110,7 @@ def gen_worldview(ws, stop_event=None):
     else:
         _check_stop(stop_event)
         prompt = PromptLoader.load("worldview_merge", volume_worldviews=all_wv)
-        result = normalize_text(llm.generate(prompt))
+        result = normalize_text(llm.generate_interruptible(prompt, stop_event))
         write_file(aggregated_path, result)
 
     log.info(f"  -> 汇总世界观已保存：{aggregated_path}")

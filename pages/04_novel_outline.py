@@ -3,9 +3,10 @@
 import os
 
 import streamlit as st
-from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector
+from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector, render_bottom_log_panel, render_config_button
 
 render_sidebar()
+render_config_button()
 
 st.title("📋 新小说大纲生成")
 
@@ -78,3 +79,5 @@ else:
     if existing_worldview:
         with st.expander("🌍 当前小说世界观"):
             st.markdown(existing_worldview)
+
+render_bottom_log_panel()

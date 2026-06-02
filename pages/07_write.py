@@ -3,9 +3,10 @@
 import os
 
 import streamlit as st
-from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector
+from ui.utils import render_sidebar, capture_stdout, show_logs, read_file_content, workspace_selector, render_bottom_log_panel, render_config_button
 
 render_sidebar()
+render_config_button()
 
 st.title("✍️ 正文撰写")
 
@@ -66,3 +67,5 @@ dynamic_wv = read_file_content(os.path.join(ws.file_system, "dynamic_worldview.m
 if dynamic_wv:
     with st.expander("🌍 动态世界观"):
         st.markdown(dynamic_wv)
+
+render_bottom_log_panel()

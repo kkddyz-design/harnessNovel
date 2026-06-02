@@ -9,6 +9,7 @@ import shutil
 from core.llm_provider import LLMProvider
 from core.prompt_loader import PromptLoader
 from core.config import ConfigLoader
+from core.exceptions import ImportInterrupted
 from core.text_utils import normalize_text, read_file, write_file
 from core.workspace import NovelWorkspace, init_workspace
 from log.logger import get_logger
@@ -59,7 +60,7 @@ def extract_volume_outline(vol_idx, volume_title, chapters, llm, outlines_dir, b
             end_chapter=batch_end,
             chapters_text=chapters_text
         )
-        result = normalize_text(llm.generate(prompt))
+        result = normalize_text(llm.generate_interruptible(prompt, stop_event))
         write_file(bfile, result)
         log.info(f"    -> 子纲已保存：{bfile}")
         batch_files.append(bfile)
@@ -97,13 +98,13 @@ def extract_volume_outline(vol_idx, volume_title, chapters, llm, outlines_dir, b
         total_batches=len(batch_summaries),
         batch_summaries=all_subs
     )
-    merged = normalize_text(llm.generate(merge_prompt))
+    merged = normalize_text(llm.generate_interruptible(merge_prompt, stop_event))
     write_file(vol_outline_path, merged)
     log.info(f"    -> 卷纲已保存：{vol_outline_path}")
     return merged
 
 
-def extract_novel_outline(volume_outlines, llm, outlines_dir):
+def extract_novel_outline(volume_outlines, llm, outlines_dir, stop_event=None):
     """汇总所有卷纲，生成完整大纲。"""
     novel_outline_path = os.path.join(outlines_dir, "novel_outline.md")
     existing = read_file(novel_outline_path)
@@ -117,7 +118,7 @@ def extract_novel_outline(volume_outlines, llm, outlines_dir):
         for vo in volume_outlines
     )
     prompt = PromptLoader.load("novel_extract", all_volume_outlines=all_outlines)
-    novel_outline = normalize_text(llm.generate(prompt))
+    novel_outline = normalize_text(llm.generate_interruptible(prompt, stop_event))
     write_file(novel_outline_path, novel_outline)
     log.info(f"  -> 完整大纲已保存：{novel_outline_path}")
     return novel_outline
@@ -218,7 +219,7 @@ def _copy_chapter_outlines_for_volume(src_dir, dst_dir, start_ch, end_ch):
             shutil.copy2(src_file, os.path.join(dst_ch_dir, f"chapter_{ch_num:03d}.md"))
 
 
-def _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm):
+def _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm, stop_event=None):
     """读取虚拟卷覆盖的批次摘要，调用 LLM 生成卷纲。"""
     vol_outline_path = os.path.join(vol_dir, "volume_outline.md")
     existing = read_file(vol_outline_path)
@@ -251,7 +252,7 @@ def _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm):
             total_batches=len(batch_summaries),
             batch_summaries=all_subs,
         )
-        outline = normalize_text(llm.generate(merge_prompt))
+        outline = normalize_text(llm.generate_interruptible(merge_prompt, stop_event))
 
     write_file(vol_outline_path, outline)
     return outline
@@ -385,11 +386,6 @@ def _load_existing_volumes(outlines_dir, groups, chapters):
     return {"volume_outlines": volume_outlines, "groups": vol_groups}
 
 
-class ImportInterrupted(Exception):
-    """导入被用户中断。"""
-    pass
-
-
 def _check_stop(stop_event):
     if stop_event and stop_event.is_set():
         raise ImportInterrupted("导入已被用户停止")
@@ -460,7 +456,7 @@ def run_outline_build(txt_path=None, output_dir=None, batch_size=20, skip_chapte
     log.info(f"\n卷纲汇总已保存至：{volume_outline_path}")
 
     # 汇总生成完整大纲
-    extract_novel_outline(volume_outlines, llm, outlines_dir)
+    extract_novel_outline(volume_outlines, llm, outlines_dir, stop_event)
 
 def resegment(outlines_dir, stop_event=None):
     """基于已有批次摘要重新执行虚拟分卷。
@@ -541,7 +537,7 @@ def resegment(outlines_dir, stop_event=None):
     all_batches_text = "\n\n---\n\n".join(batch_summaries)
     log.info(f"  -> 调用 LLM 分析批次摘要，识别卷边界...")
     seg_prompt = PromptLoader.load("virtual_volume_segment", batch_summaries=all_batches_text)
-    seg_result = normalize_text(llm.generate(seg_prompt))
+    seg_result = normalize_text(llm.generate_interruptible(seg_prompt, stop_event))
     _check_stop(stop_event)
 
     virtual_volumes = _parse_virtual_volumes(seg_result)
@@ -584,7 +580,7 @@ def resegment(outlines_dir, stop_event=None):
         with open(os.path.join(vol_dir, "meta.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False)
 
-        outline = _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm)
+        outline = _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm, stop_event)
         new_volume_outlines.append({"title": vol_title, "outline": outline})
         log.info(f"     卷纲已生成")
 
@@ -600,7 +596,7 @@ def resegment(outlines_dir, stop_event=None):
 
     # 重新生成大纲
     log.info(f"\n  -> 重新汇总生成大纲...")
-    extract_novel_outline(new_volume_outlines, llm, outlines_dir)
+    extract_novel_outline(new_volume_outlines, llm, outlines_dir, stop_event)
 
     log.info(f"\n>>> 虚拟分卷完成 <<<")
     log.info(f"  卷纲汇总：{volume_outline_path}")
@@ -689,7 +685,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
             log.info(f"  -> 调用 LLM 分析 {len(batch_summaries)} 个批次摘要，识别卷边界...")
             _check_stop(stop_event)
             seg_prompt = PromptLoader.load("virtual_volume_segment", batch_summaries=all_batches_text)
-            seg_result = normalize_text(llm.generate(seg_prompt))
+            seg_result = normalize_text(llm.generate_interruptible(seg_prompt, stop_event))
             _check_stop(stop_event)
 
             virtual_volumes = _parse_virtual_volumes(seg_result)
@@ -712,6 +708,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
                 batch_assignment = _assign_batches_to_volumes(all_batch_dir, virtual_volumes)
                 new_volume_outlines = []
                 for i, (vi, vol_title, start_ch, end_ch) in enumerate(virtual_volumes):
+                    _check_stop(stop_event)
                     vol_dir_name = _vol_dir_name(vi - 1, vol_title)
                     vol_dir = os.path.join(outlines_dir, vol_dir_name)
 
@@ -725,7 +722,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
                     with open(os.path.join(vol_dir, "meta.json"), "w", encoding="utf-8") as f:
                         json.dump(meta, f, ensure_ascii=False)
 
-                    outline = _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm)
+                    outline = _generate_virtual_volume_outline(vol_dir, start_ch, end_ch, llm, stop_event)
                     new_volume_outlines.append({"title": vol_title, "outline": outline})
                     log.info(f"     卷纲已生成")
 
@@ -847,7 +844,7 @@ def _ensure_min_chapters(virtual_volumes, min_chapters=60):
 
     # 6. 汇总生成大纲
     log.info(f"\n--- 阶段三：汇总生成大纲 ---")
-    extract_novel_outline(volume_outlines, llm, outlines_dir)
+    extract_novel_outline(volume_outlines, llm, outlines_dir, stop_event)
 
     log.info(f"\n>>> 参考小说大纲梳理完成 <<<")
 

@@ -3,9 +3,10 @@
 import os
 
 import streamlit as st
-from ui.utils import render_sidebar, read_file_content, workspace_selector
+from ui.utils import render_sidebar, read_file_content, workspace_selector, render_bottom_log_panel, render_config_button
 
 render_sidebar()
+render_config_button()
 
 st.title("📂 文件浏览")
 
@@ -71,3 +72,5 @@ if selected_file:
             st.code(content, language="text")
     else:
         st.warning("无法读取文件内容。")
+
+render_bottom_log_panel()

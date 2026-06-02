@@ -15,6 +15,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+from ui.utils import render_config_button, render_bottom_log_panel
+render_config_button()
+
 st.title("📖 harnessNovel")
 st.markdown("### 长篇网络小说 AI 辅助写作工具")
 
@@ -47,3 +50,5 @@ with col3:
 
 st.markdown("---")
 st.caption("使用左侧边栏导航到各功能页面。当前工作区和完成状态也会显示在侧边栏中。")
+
+render_bottom_log_panel()

@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 from core.text_utils import normalize_text
+from core.exceptions import ImportInterrupted
 from log.logger import get_logger
 
 _NO_RETRY_CODES = {401, 402, 403}
@@ -89,3 +90,72 @@ class LLMProvider:
             )
         self.log.success(f"API 调用成功 ({self.model})")
         return normalize_text(content)
+
+    def generate_interruptible(self, prompt, stop_event, temperature=0.7, max_tokens=None):
+        """流式生成，chunk 间检查 stop_event，支持用户随时中断。
+        流式失败时自动降级为非流式调用。
+        """
+        self.log.info(f"LLMProvider.generate_interruptible() model={self.model} temp={temperature}")
+
+        if self._mock:
+            self.log.info(f"LLMProvider.generate_interruptible() MOCK")
+            return "（Mock 响应 — 未配置真实 API Key。请在配置页面设置 API Key 后重试。）"
+
+        if not self.client:
+            raise RuntimeError("未配置有效的 API Key，无法调用 LLM。请在配置页面设置 API Key。")
+
+        if stop_event and stop_event.is_set():
+            raise ImportInterrupted("导入已被用户停止")
+
+        kwargs = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens or self.max_tokens,
+            "stream": True,
+        }
+        try:
+            kwargs["stream_options"] = {"include_usage": True}
+        except Exception:
+            pass
+
+        self.log.llm_request(self.model, self.base_url, prompt)
+
+        last_error = None
+        for attempt in range(3):
+            try:
+                stream = self.client.chat.completions.create(**kwargs)
+                chunks = []
+                for chunk in stream:
+                    if stop_event and stop_event.is_set():
+                        self.log.info("generate_interruptible: stop_event 触发，中止请求")
+                        stream.close()
+                        raise ImportInterrupted("导入已被用户停止")
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        chunks.append(chunk.choices[0].delta.content)
+
+                content = "".join(chunks)
+                if not content:
+                    raise RuntimeError("流式返回为空，可能提供方不支持 streaming")
+                self.log.llm_response(
+                    self.model,
+                    content[:300] + ("..." if len(content) > 300 else ""),
+                    full_response=content,
+                )
+                self.log.success(f"API 调用成功 ({self.model}, stream)")
+                return normalize_text(content)
+
+            except ImportInterrupted:
+                raise
+            except Exception as e:
+                last_error = e
+                status_code = getattr(e, 'status_code', None)
+                self.log.error(f"流式 API 调用失败 (attempt {attempt+1}): status={status_code}, error={e}")
+                if status_code in _NO_RETRY_CODES:
+                    break
+                if attempt < 2:
+                    self.log.info(f"重试中... ({attempt+1}/2)")
+
+        # 流式全部失败，降级为非流式调用
+        self.log.info("流式调用失败，降级为非流式 generate()")
+        return self.generate(prompt, temperature=temperature, max_tokens=max_tokens)

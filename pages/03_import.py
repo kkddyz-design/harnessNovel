@@ -9,11 +9,12 @@ import threading
 
 import streamlit as st
 from core.workspace import init_workspace
-from ui.utils import render_sidebar, workspace_selector, detect_encoding, TeeStdout
+from ui.utils import render_sidebar, workspace_selector, detect_encoding, TeeStdout, render_bottom_log_panel, render_config_button
 from log.logger import get_logger
 
 render_sidebar()
 log = get_logger()
+render_config_button()
 
 st.title("📥 导入参考小说")
 
@@ -65,7 +66,8 @@ def _run_import_thread(uploaded_bytes, sample_path, batch_size, ws, stop_event, 
         sys.stdout = tee
 
         try:
-            from training.outline_builder import run_outline_build, resegment, ImportInterrupted
+            from training.outline_builder import run_outline_build, resegment
+            from core.exceptions import ImportInterrupted
             from training.adaptive_builder import gen_worldview
 
             # Step 1: 保存文件
@@ -222,12 +224,6 @@ if st.session_state.import_running:
             log.info("用户点击了停止导入按钮")
             st.toast("正在停止导入...")
 
-    # 实时日志显示
-    logs = st.session_state.import_logs
-    if logs:
-        with st.expander("📋 实时日志", expanded=True):
-            st.code("".join(logs[-50:]))
-
     # 自动刷新
     if st.session_state.import_running:
         time.sleep(0.5)
@@ -243,3 +239,6 @@ if st.session_state.import_complete:
 if st.session_state.import_error:
     st.error(f"导入失败：{st.session_state.import_error}")
     st.session_state.import_error = None
+
+# ── 底部日志面板 ──
+render_bottom_log_panel()
